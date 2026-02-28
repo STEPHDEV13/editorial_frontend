@@ -11,8 +11,9 @@ export interface Article {
   featured:     boolean;
   imageUrl?:    string | null;
   categoryId?:  number | string | null;
-  categoryIds?: string[];
+  categoryIds?: Array<number | string>;
   category?:    Category | null;
+  categories?:  Category[];
   networkId?:   number | string | null;
   network?:     Network | null;
   publishedAt?: string | null;
@@ -21,14 +22,26 @@ export interface Article {
 }
 
 export interface ArticleFormData {
-  title:       string;
-  content:     string;
-  summary?:    string;
-  slug?:       string;
-  featured:    boolean;
-  imageUrl?:   string;
-  categoryId?: string | number | null;
-  networkId?:  string | number | null;
+  title:        string;
+  content:      string;
+  summary?:     string;
+  slug?:        string;
+  featured:     boolean;
+  imageUrl?:    string;
+  categoryIds?: Array<number | string>;
+  networkId?:   string | number | null;
+}
+
+export interface ArticleQueryParams {
+  page?:        number;
+  limit?:       number;
+  search?:      string;
+  status?:      ArticleStatus | '';
+  categoryIds?: Array<number | string>;
+  networkId?:   number | string | null;
+  featured?:    boolean;
+  sortBy?:      string;
+  sortDir?:     'asc' | 'desc';
 }
 
 // ── Category ───────────────────────────────────────────────────────────────
@@ -38,6 +51,7 @@ export interface Category {
   slug?:        string;
   color?:       string;
   description?: string;
+  articleCount?: number;
   createdAt?:   string;
 }
 
@@ -57,14 +71,23 @@ export interface Network {
 
 // ── Notification ───────────────────────────────────────────────────────────
 export interface Notification {
-  id:        number | string;
-  title:     string;
-  body:      string;
-  html?:     string | null;
-  articleId?: number | string | null;
-  article?:  Article | null;
-  sentAt?:   string | null;
-  createdAt?: string;
+  id:           number | string;
+  title?:       string;
+  body?:        string;
+  html?:        string | null;
+  articleId?:   number | string | null;
+  article?:     Article | null;
+  recipients?:  string[];
+  recipientCount?: number;
+  subject?:     string;
+  sentAt?:      string | null;
+  status?:      'sent' | 'failed' | 'pending';
+  createdAt?:   string;
+}
+
+export interface NotifyPayload {
+  recipients: string[];
+  subject?:   string;
 }
 
 // ── Import ─────────────────────────────────────────────────────────────────
