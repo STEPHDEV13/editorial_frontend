@@ -2,10 +2,18 @@ import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 
 // ── Schema mirrored from ArticleFormPage ─────────────────────────────────────
+// content uses HTML-aware length validation (strips tags before counting chars)
+
+function plainTextLength(html: string): number {
+  return html.replace(/<[^>]*>/g, '').trim().length;
+}
 
 const schema = z.object({
   title:       z.string().min(5, 'Titre minimum 5 caractères').max(255),
-  content:     z.string().min(50, 'Contenu minimum 50 caractères'),
+  content:     z.string().refine(
+    v => plainTextLength(v) >= 50,
+    'Contenu minimum 50 caractères',
+  ),
   summary:     z.string().max(500).optional().or(z.literal('')),
   slug:        z.string().max(255).optional().or(z.literal('')),
   imageUrl:    z.string().url('URL invalide').optional().or(z.literal('')),
@@ -13,7 +21,7 @@ const schema = z.object({
   categoryIds: z.array(z.any()).min(1, 'Au moins une catégorie requise'),
   networkId:   z.union([z.string(), z.number()]).nullable().refine(
     v => v !== null && v !== '',
-    { message: 'Réseau obligatoire' }
+    { message: 'Réseau obligatoire' },
   ),
 });
 
@@ -212,5 +220,47 @@ describe('schema – full valid payload', () => {
     expect(r.data.title).toBe(valid.title);
     expect(r.data.featured).toBe(false);
     expect(r.data.categoryIds).toHaveLength(1);
+  });
+});
+
+// ── content – HTML-aware validation ──────────────────────────────────────────
+
+describe('schema – content HTML-aware validation', () => {
+  it('accepts HTML content with ≥50 meaningful characters', () => {
+    const html = '<p>' + 'a'.repeat(50) + '</p>';
+    expect(parse({ content: html }).success).toBe(true);
+  });
+
+  it('rejects HTML content whose stripped text is <50 characters', () => {
+    const html = '<p><strong>Trop court</strong></p>';
+    const r = parse({ content: html });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0].message).toContain('50');
+    }
+  });
+
+  it('rejects content made of only HTML tags with no text', () => {
+    expect(parse({ content: '<p></p><br/>' }).success).toBe(false);
+  });
+
+  it('rejects content made of only whitespace inside tags', () => {
+    const html = '<p>   </p>';
+    expect(parse({ content: html }).success).toBe(false);
+  });
+
+  it('accepts mixed HTML with exactly 50 meaningful characters', () => {
+    const html = '<p><strong>' + 'x'.repeat(25) + '</strong>' + 'y'.repeat(25) + '</p>';
+    expect(parse({ content: html }).success).toBe(true);
+  });
+
+  it('accepts content with formatted lists that sum to ≥50 chars', () => {
+    const items = Array.from({ length: 5 }, (_, i) => `<li>Item numéro ${i + 1} avec du texte</li>`).join('');
+    const html = `<ul>${items}</ul>`;
+    expect(parse({ content: html }).success).toBe(true);
+  });
+
+  it('rejects an empty string', () => {
+    expect(parse({ content: '' }).success).toBe(false);
   });
 });
