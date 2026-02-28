@@ -29,8 +29,6 @@ import {
   FormHelperText,
   CircularProgress,
   Tooltip,
-  Paper,
-  Badge,
 } from '@mui/material';
 import {
   Save,
@@ -54,12 +52,31 @@ import {
   getNetworks,
 } from '../services/api';
 import StatusChip from '../components/common/StatusChip';
+import RichTextEditor from '../components/common/RichTextEditor';
 import type { ArticleFormData, Category, Network, Article } from '../types';
 
-// ── Validation schema ────────────────────────────────────────────────────────
-const schema = z.object({
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Strip HTML tags to count meaningful text length */
+function plainTextLength(html: string): number {
+  return html.replace(/<[^>]*>/g, '').trim().length;
+}
+
+/** Render HTML content safely in the preview panel */
+function previewHtml(content: string): string {
+  const isHtml = /<[a-zA-Z][\s\S]*>/i.test(content);
+  if (isHtml) return content;
+  // plain text: preserve line breaks
+  return content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br/>');
+}
+
+// ── Validation schema ─────────────────────────────────────────────────────────
+export const articleSchema = z.object({
   title:      z.string().min(5, 'Titre minimum 5 caractères').max(255),
-  content:    z.string().min(50, 'Contenu minimum 50 caractères'),
+  content:    z.string().refine(
+    v => plainTextLength(v) >= 50,
+    'Contenu minimum 50 caractères',
+  ),
   summary:    z.string().max(500).optional().or(z.literal('')),
   slug:       z.string().max(255).optional().or(z.literal('')),
   imageUrl:   z.string().url('URL invalide').optional().or(z.literal('')),
@@ -67,20 +84,21 @@ const schema = z.object({
   categoryIds: z.array(z.any()).min(1, 'Au moins une catégorie requise'),
   networkId:   z.union([z.string(), z.number()]).nullable().refine(
     v => v !== null && v !== '',
-    { message: 'Réseau obligatoire' }
+    { message: 'Réseau obligatoire' },
   ),
 });
 
-type FormValues = z.infer<typeof schema>;
+type FormValues = z.infer<typeof articleSchema>;
 
-// ── Auto-save indicator ──────────────────────────────────────────────────────
+// ── Auto-save indicator ───────────────────────────────────────────────────────
 type SaveState = 'idle' | 'saving' | 'saved' | 'unsaved';
+
 function AutoSaveIndicator({ state }: { state: SaveState }) {
   const map: Record<SaveState, { icon: React.ReactNode; label: string; color: string }> = {
-    idle:    { icon: null,                             label: '',               color: 'text.disabled' },
-    saving:  { icon: <HourglassBottom fontSize="small" />, label: 'Sauvegarde…',  color: 'info.main' },
-    saved:   { icon: <CloudDone fontSize="small" />,       label: 'Brouillon sauvegardé', color: 'success.main' },
-    unsaved: { icon: <CloudOff fontSize="small" />,        label: 'Non sauvegardé', color: 'warning.main' },
+    idle:    { icon: null,                                  label: '',                        color: 'text.disabled' },
+    saving:  { icon: <HourglassBottom fontSize="small" />, label: 'Sauvegarde…',             color: 'info.main' },
+    saved:   { icon: <CloudDone fontSize="small" />,       label: 'Brouillon sauvegardé',    color: 'success.main' },
+    unsaved: { icon: <CloudOff fontSize="small" />,        label: 'Modifications non sauvegardées', color: 'warning.main' },
   };
   const { icon, label, color } = map[state];
   if (!label) return null;
@@ -94,16 +112,16 @@ function AutoSaveIndicator({ state }: { state: SaveState }) {
 
 // ── Main form page ────────────────────────────────────────────────────────────
 export default function ArticleFormPage() {
-  const { id }     = useParams<{ id?: string }>();
-  const isEdit     = !!id;
-  const navigate   = useNavigate();
-  const qc         = useQueryClient();
+  const { id }   = useParams<{ id?: string }>();
+  const isEdit   = !!id;
+  const navigate = useNavigate();
+  const qc       = useQueryClient();
 
   const [snack,     setSnack]    = useState<{ msg: string; sev: 'success' | 'error' } | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const autoSaveTimer = useRef<ReturnType<typeof setInterval>>();
 
-  // ── Data queries ──────────────────────────────────────────────────────
+  // ── Data queries ─────────────────────────────────────────────────────────
   const { data: article, isLoading: loadingArticle } = useQuery({
     queryKey: ['article', id],
     queryFn:  () => getArticle(id!),
@@ -120,17 +138,16 @@ export default function ArticleFormPage() {
     queryFn:  getNetworks,
   });
 
-  // ── Form ──────────────────────────────────────────────────────────────
+  // ── Form ─────────────────────────────────────────────────────────────────
   const {
     control,
     register,
     handleSubmit,
     reset,
     watch,
-    setValue,
     formState: { errors, isDirty },
   } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(articleSchema),
     defaultValues: {
       title:       '',
       content:     '',
@@ -146,17 +163,17 @@ export default function ArticleFormPage() {
   // Populate form when editing
   useEffect(() => {
     if (!article) return;
-    const catIds = article.categoryIds?.map(String) ?? (article.categoryId ? [String(article.categoryId)] : []);
+    const catIds       = article.categoryIds?.map(String) ?? (article.categoryId ? [String(article.categoryId)] : []);
     const selectedCats = catIds
-      .map(id => (categories as Category[]).find(c => String(c.id) === id))
+      .map(cid => (categories as Category[]).find(c => String(c.id) === cid))
       .filter(Boolean) as Category[];
 
     reset({
       title:       article.title,
       content:     article.content,
-      summary:     article.summary ?? '',
-      slug:        article.slug ?? '',
-      imageUrl:    article.imageUrl ?? '',
+      summary:     article.summary   ?? '',
+      slug:        article.slug      ?? '',
+      imageUrl:    article.imageUrl  ?? '',
       featured:    article.featured,
       categoryIds: selectedCats,
       networkId:   article.networkId ? String(article.networkId) : null,
@@ -168,7 +185,7 @@ export default function ArticleFormPage() {
     if (isDirty && isEdit) setSaveState('unsaved');
   }, [isDirty, isEdit]);
 
-  // ── Mutations ─────────────────────────────────────────────────────────
+  // ── Mutations ────────────────────────────────────────────────────────────
   const createMut = useMutation({
     mutationFn: (data: ArticleFormData) => createArticle(data),
     onSuccess: (created) => {
@@ -209,20 +226,21 @@ export default function ArticleFormPage() {
     onError: (e: Error) => setSnack({ msg: e.message, sev: 'error' }),
   });
 
-  // ── Build API payload ─────────────────────────────────────────────────
+  // ── Build API payload ────────────────────────────────────────────────────
   const buildPayload = useCallback((values: FormValues): ArticleFormData => ({
     title:       values.title,
     content:     values.content,
-    summary:     values.summary || undefined,
-    slug:        values.slug    || undefined,
+    summary:     values.summary  || undefined,
+    slug:        values.slug     || undefined,
     imageUrl:    values.imageUrl || undefined,
     featured:    values.featured,
     categoryIds: (values.categoryIds as Category[]).map(c => c.id),
     networkId:   values.networkId,
   }), []);
 
-  // ── Auto-save every 30s (draft only) ──────────────────────────────────
+  // ── Auto-save every 30s (draft only) ─────────────────────────────────────
   const formValues = watch();
+
   const doAutoSave = useCallback(() => {
     if (!isEdit) return;
     if (article?.status !== 'draft') return;
@@ -243,15 +261,16 @@ export default function ArticleFormPage() {
     return () => clearInterval(autoSaveTimer.current);
   }, [doAutoSave]);
 
-  // ── Submit ────────────────────────────────────────────────────────────
+  // ── Submit ───────────────────────────────────────────────────────────────
   const onSubmit = (values: FormValues) => {
     const payload = buildPayload(values);
     if (isEdit) updateMut.mutate(payload);
     else        createMut.mutate(payload);
   };
 
-  // ── Preview values ────────────────────────────────────────────────────
+  // ── Preview watchers ─────────────────────────────────────────────────────
   const watchTitle    = watch('title');
+  const watchContent  = watch('content');
   const watchSummary  = watch('summary');
   const watchImageUrl = watch('imageUrl');
   const watchFeatured = watch('featured');
@@ -273,7 +292,7 @@ export default function ArticleFormPage() {
 
   return (
     <Box component="form" onSubmit={handleSubmit(onSubmit)}>
-      {/* ── Header bar ───────────────────────────────────────────────── */}
+      {/* ── Header bar ─────────────────────────────────────────────────── */}
       <Stack direction="row" alignItems="center" spacing={2} mb={2} flexWrap="wrap">
         <Button
           startIcon={<ArrowBack />}
@@ -282,8 +301,9 @@ export default function ArticleFormPage() {
         >
           Articles
         </Button>
+
         <Typography variant="h6" fontWeight={700} sx={{ flexGrow: 1 }}>
-          {isEdit ? 'Modifier l\'article' : 'Nouvel article'}
+          {isEdit ? "Modifier l'article" : 'Nouvel article'}
         </Typography>
 
         {isEdit && <AutoSaveIndicator state={saveState} />}
@@ -340,7 +360,7 @@ export default function ArticleFormPage() {
       </Stack>
 
       <Grid container spacing={3}>
-        {/* ── Left panel: form ────────────────────────────────────────── */}
+        {/* ── Left panel: form ──────────────────────────────────────────── */}
         <Grid item xs={12} md={7}>
           <Stack spacing={2}>
             <Card>
@@ -369,15 +389,23 @@ export default function ArticleFormPage() {
                     error={!!errors.summary}
                     helperText={errors.summary?.message ?? 'Max 500 caractères'}
                   />
-                  <TextField
-                    label="Contenu *"
-                    fullWidth
-                    multiline
-                    rows={12}
-                    {...register('content')}
-                    error={!!errors.content}
-                    helperText={errors.content?.message ?? 'Minimum 50 caractères'}
+
+                  {/* ── Rich text editor ─────────────────────────── */}
+                  <Controller
+                    name="content"
+                    control={control}
+                    render={({ field }) => (
+                      <RichTextEditor
+                        label="Contenu *"
+                        value={field.value}
+                        onChange={field.onChange}
+                        error={!!errors.content}
+                        helperText={errors.content?.message ?? 'Minimum 50 caractères de texte'}
+                        minHeight={300}
+                      />
+                    )}
                   />
+
                   <TextField
                     label="URL image de couverture"
                     fullWidth
@@ -484,7 +512,7 @@ export default function ArticleFormPage() {
           </Stack>
         </Grid>
 
-        {/* ── Right panel: preview ─────────────────────────────────────── */}
+        {/* ── Right panel: real-time preview ────────────────────────────── */}
         <Grid item xs={12} md={5}>
           <Card sx={{ position: 'sticky', top: 80 }}>
             <CardContent>
@@ -542,8 +570,55 @@ export default function ArticleFormPage() {
 
               <Divider sx={{ my: 1.5 }} />
 
+              {/* ── Content preview ──────────────────────────────── */}
+              {watchContent ? (
+                <Box
+                  data-testid="preview-content"
+                  sx={{
+                    fontSize: '0.85rem',
+                    lineHeight: 1.75,
+                    color: 'text.primary',
+                    maxHeight: 320,
+                    overflowY: 'auto',
+                    position: 'relative',
+                    '& h2': { fontSize: '1.05rem', fontWeight: 700, mt: 1.5, mb: 0.5 },
+                    '& h3': { fontSize: '0.95rem', fontWeight: 600, mt: 1, mb: 0.5 },
+                    '& p':  { mt: 0, mb: 0.75 },
+                    '& blockquote': {
+                      borderLeft: '3px solid',
+                      borderColor: 'primary.main',
+                      pl: 1.5,
+                      ml: 0,
+                      color: 'text.secondary',
+                      fontStyle: 'italic',
+                      my: 1,
+                    },
+                    '& ul, & ol': { pl: 2.5, my: 0.5 },
+                    '& li': { mb: 0.25 },
+                    '& a':  { color: 'primary.main' },
+                    // Bottom fade-out when content overflows
+                    '&:after': {
+                      content: '""',
+                      display: 'block',
+                      position: 'sticky',
+                      bottom: 0,
+                      height: 32,
+                      background: 'linear-gradient(transparent, #12121A)',
+                      mt: -4,
+                      pointerEvents: 'none',
+                    },
+                  }}
+                  // Safe: content is produced by our own contenteditable RichTextEditor
+                  dangerouslySetInnerHTML={{ __html: previewHtml(watchContent) }}
+                />
+              ) : (
+                <Typography variant="body2" sx={{ opacity: 0.3, fontStyle: 'italic' }}>
+                  Le contenu apparaîtra ici…
+                </Typography>
+              )}
+
               {article?.publishedAt && (
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" color="text.secondary" display="block" mt={1.5}>
                   Publié le {new Date(article.publishedAt).toLocaleDateString('fr-FR')}
                 </Typography>
               )}
@@ -558,7 +633,7 @@ export default function ArticleFormPage() {
         </Grid>
       </Grid>
 
-      {/* ── Snackbar ──────────────────────────────────────────────────── */}
+      {/* ── Snackbar ────────────────────────────────────────────────────── */}
       <Snackbar
         open={!!snack}
         autoHideDuration={3000}
