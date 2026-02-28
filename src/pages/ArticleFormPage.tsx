@@ -101,7 +101,7 @@ export default function ArticleFormPage() {
 
   const [snack,     setSnack]    = useState<{ msg: string; sev: 'success' | 'error' } | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
-  const autoSaveTimer = useRef<ReturnType<typeof setTimeout>>();
+  const autoSaveTimer = useRef<ReturnType<typeof setInterval>>();
 
   // ── Data queries ──────────────────────────────────────────────────────
   const { data: article, isLoading: loadingArticle } = useQuery({
@@ -238,9 +238,9 @@ export default function ArticleFormPage() {
   }, [isEdit, article, formValues, id, buildPayload]);
 
   useEffect(() => {
-    clearTimeout(autoSaveTimer.current);
+    clearInterval(autoSaveTimer.current);
     autoSaveTimer.current = setInterval(doAutoSave, 30_000);
-    return () => clearInterval(autoSaveTimer.current as any);
+    return () => clearInterval(autoSaveTimer.current);
   }, [doAutoSave]);
 
   // ── Submit ────────────────────────────────────────────────────────────
