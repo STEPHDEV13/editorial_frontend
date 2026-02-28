@@ -104,7 +104,7 @@ export default function DashboardPage() {
 
   const { data: articles = [], isLoading: loadingArticles } = useQuery({
     queryKey: ['articles', 'all'],
-    queryFn: () => getArticles({ limit: 1000, page: 1 }),
+    queryFn: () => getArticles({ limit: 100, page: 1 }),
   });
 
   const { data: categories = [], isLoading: loadingCategories } = useQuery({
