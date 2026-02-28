@@ -97,6 +97,9 @@ Le logo est utilise dans :
 | Methode | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/networks` | Liste des reseaux |
+| `POST` | `/api/networks` | Creer un reseau |
+| `PUT` | `/api/networks/:id` | Mettre a jour un reseau |
+| `DELETE` | `/api/networks/:id` | Supprimer un reseau |
 
 ### Import
 | Methode | Endpoint | Description |
@@ -141,6 +144,7 @@ src/
     ArticlesPage.tsx
     ArticleFormPage.tsx
     CategoriesPage.tsx
+    NetworksPage.tsx
     NotificationsPage.tsx
     ImportPage.tsx
 ```

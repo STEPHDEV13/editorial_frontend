@@ -36,8 +36,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { getArticles, getCategories, getNotifications } from '../services/api';
-import type { Article, Category, Notification } from '../types';
+import { getArticles, getCategories, getNetworks, getNotifications } from '../services/api';
+import type { Article, Category, Network, Notification } from '../types';
 
 // ── Brand palette for pie slices ────────────────────────────────────────────
 const BRAND_COLORS = [
@@ -112,6 +112,11 @@ export default function DashboardPage() {
     queryFn: getCategories,
   });
 
+  const { data: networks = [] } = useQuery({
+    queryKey: ['networks'],
+    queryFn: getNetworks,
+  });
+
   const { data: notifications = [], isLoading: loadingNotifs } = useQuery({
     queryKey: ['notifications'],
     queryFn: getNotifications,
@@ -126,10 +131,15 @@ export default function DashboardPage() {
     const featured  = articles.filter((a: Article) => a.featured).length;
 
     // Articles by network
+    const networkById = new Map<string, Network>(
+      networks.map((n: Network) => [String(n.id), n])
+    );
     const networkMap = new Map<string, number>();
     articles.forEach((a: Article) => {
-      const name = a.network?.name ?? (a.networkId ? `Réseau #${a.networkId}` : null);
-      if (name) networkMap.set(name, (networkMap.get(name) ?? 0) + 1);
+      const resolved = a.network?.name
+        ?? (a.networkId ? networkById.get(String(a.networkId))?.name : undefined)
+        ?? (a.networkId ? `Réseau #${a.networkId}` : null);
+      if (resolved) networkMap.set(resolved, (networkMap.get(resolved) ?? 0) + 1);
     });
     const byNetwork = Array.from(networkMap.entries())
       .sort((a, b) => b[1] - a[1])
@@ -161,7 +171,7 @@ export default function DashboardPage() {
       .sort((a, b) => b.value - a.value);
 
     return { total, published, draft, archived, featured, byNetwork, pieData };
-  }, [articles, categories]);
+  }, [articles, categories, networks]);
 
   // ── 5 derniers articles publiés ──────────────────────────────────────────
   const recentPublished = useMemo(() =>
