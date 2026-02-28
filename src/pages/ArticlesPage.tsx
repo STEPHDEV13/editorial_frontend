@@ -1,328 +1,681 @@
-import { useState } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Box from '@mui/material/Box';
-import Card from '@mui/material/Card';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
-import TablePagination from '@mui/material/TablePagination';
-import TextField from '@mui/material/TextField';
-import MenuItem from '@mui/material/MenuItem';
-import Select from '@mui/material/Select';
-import InputLabel from '@mui/material/InputLabel';
-import FormControl from '@mui/material/FormControl';
-import IconButton from '@mui/material/IconButton';
-import Button from '@mui/material/Button';
-import Tooltip from '@mui/material/Tooltip';
-import Chip from '@mui/material/Chip';
-import Typography from '@mui/material/Typography';
-import Snackbar from '@mui/material/Snackbar';
-import Alert from '@mui/material/Alert';
-import StarIcon from '@mui/icons-material/Star';
-import StarBorderIcon from '@mui/icons-material/StarBorder';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import NotificationsIcon from '@mui/icons-material/Notifications';
-import AddIcon from '@mui/icons-material/Add';
-import { alpha } from '@mui/material/styles';
+import {
+  Box,
+  Card,
+  CardContent,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  TablePagination,
+  TableSortLabel,
+  Checkbox,
+  TextField,
+  InputAdornment,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  Button,
+  IconButton,
+  Tooltip,
+  Chip,
+  Stack,
+  Toolbar,
+  Typography,
+  Snackbar,
+  Alert,
+  CircularProgress,
+  Switch,
+  FormControlLabel,
+  Skeleton,
+  Autocomplete,
+  Divider,
+} from '@mui/material';
+import {
+  Search,
+  Add,
+  Edit,
+  Delete,
+  Archive,
+  Star,
+  StarBorder,
+  Notifications,
+  CheckCircle,
+  FilterList,
+} from '@mui/icons-material';
+import {
+  getArticles,
+  getCategories,
+  getNetworks,
+  deleteArticle,
+  patchArticleStatus,
+  notifyArticle,
+  updateArticle,
+} from '../services/api';
 import StatusChip from '../components/common/StatusChip';
-import LoadingState from '../components/common/LoadingState';
-import EmptyState from '../components/common/EmptyState';
 import ConfirmDialog from '../components/common/ConfirmDialog';
-import { getArticles, deleteArticle, patchArticleStatus, notifyArticle, getCategories } from '../services/api';
-import { BRAND } from '../theme';
-import type { Article, ArticleStatus } from '../types';
+import type { Article, ArticleStatus, Category, Network } from '../types';
+
+type SortDir = 'asc' | 'desc';
+type SortCol = 'title' | 'createdAt' | 'status' | 'networkId';
+
+const PAGE_SIZE = 20;
+
+function buildCategoryMap(categories: Category[]): Map<string, Category> {
+  return new Map(categories.map(c => [String(c.id), c]));
+}
+
+function resolveCategory(article: Article, catMap: Map<string, Category>): Category | null {
+  const ids = article.categoryIds?.map(String) ?? [];
+  if (ids.length > 0) return catMap.get(ids[0]) ?? null;
+  if (article.categoryId != null) return catMap.get(String(article.categoryId)) ?? null;
+  return null;
+}
 
 export default function ArticlesPage() {
-  const navigate     = useNavigate();
-  const queryClient  = useQueryClient();
+  const navigate   = useNavigate();
+  const qc         = useQueryClient();
 
-  // Filters
-  const [search,     setSearch]     = useState('');
-  const [statusFilter, setStatusFilter] = useState<ArticleStatus | 'all'>('all');
-  const [page,       setPage]       = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  // ── Filter/sort state ──────────────────────────────────────────────────
+  const [search,        setSearch]        = useState('');
+  const [searchInput,   setSearchInput]   = useState('');
+  const [statusFilter,  setStatusFilter]  = useState<ArticleStatus | ''>('');
+  const [selectedCats,  setSelectedCats]  = useState<Category[]>([]);
+  const [networkFilter, setNetworkFilter] = useState<string>('');
+  const [featuredOnly,  setFeaturedOnly]  = useState(false);
+  const [sortCol,       setSortCol]       = useState<SortCol>('createdAt');
+  const [sortDir,       setSortDir]       = useState<SortDir>('desc');
+  const [page,          setPage]          = useState(0);
 
-  // UI state
-  const [deleteTarget, setDeleteTarget] = useState<Article | null>(null);
-  const [snack, setSnack] = useState<{ msg: string; severity: 'success' | 'error' } | null>(null);
+  // Debounce search
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(0);
+    }, 300);
+    return () => clearTimeout(searchTimer.current);
+  }, [searchInput]);
 
-  // ── Data ──
-  const { data: articles = [], isLoading, isError } = useQuery({
-    queryKey: ['articles'],
-    queryFn:  getArticles,
+  // Reset page on filter change
+  useEffect(() => { setPage(0); }, [statusFilter, selectedCats, networkFilter, featuredOnly, sortCol, sortDir]);
+
+  // ── Data queries ───────────────────────────────────────────────────────
+  const { data: allArticles = [], isLoading: loadingArticles } = useQuery({
+    queryKey: ['articles', 'all'],
+    queryFn: () => getArticles({ limit: 2000 }),
   });
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories'],
-    queryFn:  getCategories,
+    queryFn: getCategories,
   });
 
-  const categoryMap = Object.fromEntries(categories.map((c) => [String(c.id), c]));
+  const { data: networks = [] } = useQuery({
+    queryKey: ['networks'],
+    queryFn: getNetworks,
+  });
 
-  // ── Mutations ──
+  const catMap = useMemo(() => buildCategoryMap(categories), [categories]);
+
+  // ── Client-side filtering + sorting ───────────────────────────────────
+  const filtered = useMemo(() => {
+    let list = allArticles as Article[];
+
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(a =>
+        a.title.toLowerCase().includes(q) ||
+        (a.content?.toLowerCase().includes(q))
+      );
+    }
+    if (statusFilter) {
+      list = list.filter(a => a.status === statusFilter);
+    }
+    if (selectedCats.length > 0) {
+      const ids = new Set(selectedCats.map(c => String(c.id)));
+      list = list.filter(a => {
+        const artIds = (a.categoryIds?.map(String) ?? []);
+        if (artIds.length > 0) return artIds.some(id => ids.has(id));
+        if (a.categoryId != null) return ids.has(String(a.categoryId));
+        return false;
+      });
+    }
+    if (networkFilter) {
+      list = list.filter(a => String(a.networkId) === networkFilter);
+    }
+    if (featuredOnly) {
+      list = list.filter(a => a.featured);
+    }
+
+    // Sort
+    list = [...list].sort((a, b) => {
+      let av: string, bv: string;
+      switch (sortCol) {
+        case 'title':     av = a.title;              bv = b.title; break;
+        case 'status':    av = a.status;             bv = b.status; break;
+        case 'networkId': av = String(a.networkId ?? ''); bv = String(b.networkId ?? ''); break;
+        default:          av = a.createdAt ?? '';    bv = b.createdAt ?? '';
+      }
+      return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+
+    return list;
+  }, [allArticles, search, statusFilter, selectedCats, networkFilter, featuredOnly, sortCol, sortDir]);
+
+  // Pagination (client-side)
+  const paginated = useMemo(() =>
+    filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [filtered, page]
+  );
+
+  // ── Selection (bulk actions) ──────────────────────────────────────────
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const allPageIds  = paginated.map(a => String(a.id));
+  const allSelected = allPageIds.length > 0 && allPageIds.every(id => selected.has(id));
+  const someSelected = allPageIds.some(id => selected.has(id)) && !allSelected;
+
+  const toggleAll = () => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (allSelected) allPageIds.forEach(id => next.delete(id));
+      else allPageIds.forEach(id => next.add(id));
+      return next;
+    });
+  };
+  const toggleOne = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  // ── Confirm dialog ────────────────────────────────────────────────────
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  // ── Snackbar ──────────────────────────────────────────────────────────
+  const [snack, setSnack] = useState<{ msg: string; sev: 'success' | 'error' } | null>(null);
+
+  // ── Mutations ─────────────────────────────────────────────────────────
   const deleteMut = useMutation({
-    mutationFn: (id: number | string) => deleteArticle(id),
+    mutationFn: (id: string) => deleteArticle(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['articles'] });
-      setSnack({ msg: 'Article supprimé.', severity: 'success' });
-      setDeleteTarget(null);
+      qc.invalidateQueries({ queryKey: ['articles'] });
+      setSnack({ msg: 'Article supprimé', sev: 'success' });
     },
-    onError: (e: Error) => setSnack({ msg: e.message, severity: 'error' }),
+    onError: (e: Error) => setSnack({ msg: e.message, sev: 'error' }),
   });
 
   const statusMut = useMutation({
-    mutationFn: ({ id, status }: { id: number | string; status: ArticleStatus }) =>
+    mutationFn: ({ id, status }: { id: string; status: ArticleStatus }) =>
       patchArticleStatus(id, status),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['articles'] });
-      setSnack({ msg: 'Statut mis à jour.', severity: 'success' });
+      qc.invalidateQueries({ queryKey: ['articles'] });
+      setSnack({ msg: 'Statut mis à jour', sev: 'success' });
     },
-    onError: (e: Error) => setSnack({ msg: e.message, severity: 'error' }),
+    onError: (e: Error) => setSnack({ msg: e.message, sev: 'error' }),
   });
 
   const notifyMut = useMutation({
-    mutationFn: (id: number | string) => notifyArticle(id),
-    onSuccess: () => setSnack({ msg: 'Notification envoyée.', severity: 'success' }),
-    onError:   (e: Error) => setSnack({ msg: e.message, severity: 'error' }),
+    mutationFn: (id: string) => notifyArticle(id),
+    onSuccess: () => setSnack({ msg: 'Notification envoyée', sev: 'success' }),
+    onError: (e: Error) => setSnack({ msg: e.message, sev: 'error' }),
   });
 
-  // ── Filtered / paginated data ──
-  const filtered = articles.filter((a) => {
-    const matchSearch = a.title.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'all' || a.status === statusFilter;
-    return matchSearch && matchStatus;
+  const featuredMut = useMutation({
+    mutationFn: ({ id, featured }: { id: string; featured: boolean }) =>
+      updateArticle(id, { featured }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['articles'] });
+    },
+    onError: (e: Error) => setSnack({ msg: e.message, sev: 'error' }),
   });
 
-  const paginated = filtered.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  // Bulk status change
+  const [bulkStatus, setBulkStatus] = useState<ArticleStatus | ''>('');
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const applyBulkStatus = useCallback(async () => {
+    if (!bulkStatus || selected.size === 0) return;
+    setBulkLoading(true);
+    try {
+      await Promise.all(
+        Array.from(selected).map(id => patchArticleStatus(id, bulkStatus as ArticleStatus))
+      );
+      qc.invalidateQueries({ queryKey: ['articles'] });
+      setSelected(new Set());
+      setBulkStatus('');
+      setSnack({ msg: `${selected.size} articles mis à jour`, sev: 'success' });
+    } catch (e: any) {
+      setSnack({ msg: e.message, sev: 'error' });
+    } finally {
+      setBulkLoading(false);
+    }
+  }, [bulkStatus, selected, qc]);
 
-  if (isLoading) return <LoadingState />;
-  if (isError)   return (
-    <EmptyState
-      title="Erreur de chargement"
-      description="Impossible de récupérer les articles. Vérifiez que le backend est démarré."
-      actionLabel="Réessayer"
-      onAction={() => queryClient.invalidateQueries({ queryKey: ['articles'] })}
-    />
-  );
+  // ── Sort handler ──────────────────────────────────────────────────────
+  const handleSort = (col: SortCol) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('asc'); }
+  };
+
+  const networkMap = useMemo(() => {
+    const m = new Map<string, Network>();
+    (networks as Network[]).forEach(n => m.set(String(n.id), n));
+    return m;
+  }, [networks]);
 
   return (
     <Box>
-      {/* ── Toolbar ── */}
-      <Box display="flex" gap={2} mb={3} flexWrap="wrap" alignItems="center">
-        <TextField
-          size="small"
-          placeholder="Rechercher un article…"
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-          sx={{ minWidth: 240, flex: 1 }}
-        />
-        <FormControl size="small" sx={{ minWidth: 160 }}>
-          <InputLabel>Statut</InputLabel>
-          <Select
-            value={statusFilter}
-            label="Statut"
-            onChange={(e) => { setStatusFilter(e.target.value as ArticleStatus | 'all'); setPage(0); }}
-          >
-            <MenuItem value="all">Tous</MenuItem>
-            <MenuItem value="draft">Brouillon</MenuItem>
-            <MenuItem value="published">Publié</MenuItem>
-            <MenuItem value="archived">Archivé</MenuItem>
-          </Select>
-        </FormControl>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => navigate('/articles/new')}
-          sx={{ backgroundImage: BRAND.gradient, whiteSpace: 'nowrap' }}
-        >
-          Nouvel article
-        </Button>
-      </Box>
+      {/* ── Toolbar ───────────────────────────────────────────────────── */}
+      <Card sx={{ mb: 2 }}>
+        <CardContent sx={{ pb: '12px !important' }}>
+          {/* Row 1: search + add */}
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} mb={1.5} alignItems="flex-start">
+            <TextField
+              size="small"
+              placeholder="Rechercher titre / contenu…"
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              sx={{ flexGrow: 1, minWidth: 220 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => navigate('/articles/new')}
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              Nouvel article
+            </Button>
+          </Stack>
 
-      {/* ── Table ── */}
-      {paginated.length === 0 ? (
-        <EmptyState
-          title="Aucun article trouvé"
-          description={search || statusFilter !== 'all' ? 'Essayez de modifier vos filtres.' : 'Créez votre premier article.'}
-          actionLabel={!search && statusFilter === 'all' ? 'Créer un article' : undefined}
-          onAction={() => navigate('/articles/new')}
-        />
-      ) : (
-        <Card>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ width: 32 }}></TableCell>
-                  <TableCell>Titre</TableCell>
-                  <TableCell>Catégorie</TableCell>
-                  <TableCell>Statut</TableCell>
-                  <TableCell>Réseau</TableCell>
-                  <TableCell>Créé le</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginated.map((article) => (
-                  <TableRow key={article.id} hover>
-                    {/* Featured star */}
-                    <TableCell padding="checkbox">
-                      {article.featured
-                        ? <StarIcon sx={{ fontSize: 16, color: '#FFB74D' }} />
-                        : <StarBorderIcon sx={{ fontSize: 16, color: 'text.secondary', opacity: 0.4 }} />
-                      }
-                    </TableCell>
+          {/* Row 2: filters */}
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} flexWrap="wrap">
+            <FormControl size="small" sx={{ minWidth: 140 }}>
+              <InputLabel>Statut</InputLabel>
+              <Select
+                value={statusFilter}
+                label="Statut"
+                onChange={e => setStatusFilter(e.target.value as ArticleStatus | '')}
+              >
+                <MenuItem value="">Tous</MenuItem>
+                <MenuItem value="draft">Brouillon</MenuItem>
+                <MenuItem value="published">Publié</MenuItem>
+                <MenuItem value="archived">Archivé</MenuItem>
+              </Select>
+            </FormControl>
 
-                    <TableCell>
-                      <Typography
-                        variant="body2"
-                        fontWeight={600}
-                        sx={{ cursor: 'pointer', '&:hover': { color: BRAND.blue } }}
-                        onClick={() => navigate(`/articles/${article.id}/edit`)}
-                        noWrap
-                        maxWidth={280}
-                      >
-                        {article.title}
-                      </Typography>
-                      {article.summary && (
-                        <Typography variant="caption" color="text.secondary" noWrap display="block" maxWidth={280}>
-                          {article.summary}
-                        </Typography>
-                      )}
-                    </TableCell>
+            <Autocomplete
+              multiple
+              size="small"
+              options={categories as Category[]}
+              getOptionLabel={o => o.name}
+              value={selectedCats}
+              onChange={(_, v) => setSelectedCats(v)}
+              sx={{ minWidth: 200, flexGrow: 1 }}
+              renderInput={params => (
+                <TextField {...params} label="Catégories" placeholder="Filtrer…" />
+              )}
+              renderTags={(vals, getTagProps) =>
+                vals.map((c, i) => {
+                  const tagProps = getTagProps({ index: i });
+                  return (
+                    <Chip
+                      {...tagProps}
+                      key={tagProps.key}
+                      label={c.name}
+                      size="small"
+                      sx={{ bgcolor: c.color ?? 'primary.main', color: '#fff' }}
+                    />
+                  );
+                })
+              }
+            />
 
-                    <TableCell>
-                      {(() => {
-                        const firstId = article.categoryIds?.[0] ?? (article.categoryId ? String(article.categoryId) : undefined);
-                        const cat = firstId ? categoryMap[firstId] : null;
-                        return cat ? (
-                          <Chip
-                            label={cat.name}
-                            size="small"
-                            sx={{
-                              fontSize: '0.72rem',
-                              bgcolor: cat.color
-                                ? alpha(cat.color, 0.18)
-                                : alpha(BRAND.purple, 0.14),
-                              color: cat.color ?? BRAND.purple,
-                              fontWeight: 600,
-                            }}
-                          />
-                        ) : (
-                          <Typography variant="caption" color="text.secondary">—</Typography>
-                        );
-                      })()}
-                    </TableCell>
-
-                    <TableCell>
-                      <StatusChip status={article.status} />
-                    </TableCell>
-
-                    <TableCell>
-                      <Typography variant="caption" color="text.secondary">
-                        {article.network?.name ?? '—'}
-                      </Typography>
-                    </TableCell>
-
-                    <TableCell>
-                      <Typography variant="caption" color="text.secondary">
-                        {article.createdAt
-                          ? new Date(article.createdAt).toLocaleDateString('fr-FR')
-                          : '—'}
-                      </Typography>
-                    </TableCell>
-
-                    <TableCell align="right">
-                      <Box display="flex" gap={0.5} justifyContent="flex-end">
-                        {/* Status quick actions */}
-                        {article.status === 'draft' && (
-                          <Tooltip title="Publier">
-                            <IconButton
-                              size="small"
-                              onClick={() => statusMut.mutate({ id: article.id, status: 'published' })}
-                              sx={{ color: '#00E676' }}
-                            >
-                              <NotificationsIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                        {article.status === 'published' && (
-                          <Tooltip title="Envoyer notification">
-                            <IconButton
-                              size="small"
-                              onClick={() => notifyMut.mutate(article.id)}
-                              sx={{ color: '#40C4FF' }}
-                            >
-                              <NotificationsIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-
-                        <Tooltip title="Modifier">
-                          <IconButton
-                            size="small"
-                            onClick={() => navigate(`/articles/${article.id}/edit`)}
-                            sx={{ color: 'text.secondary', '&:hover': { color: BRAND.blue } }}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-
-                        <Tooltip title="Supprimer">
-                          <IconButton
-                            size="small"
-                            onClick={() => setDeleteTarget(article)}
-                            sx={{ color: 'text.secondary', '&:hover': { color: '#FF4D6D' } }}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
+            <FormControl size="small" sx={{ minWidth: 140 }}>
+              <InputLabel>Réseau</InputLabel>
+              <Select
+                value={networkFilter}
+                label="Réseau"
+                onChange={e => setNetworkFilter(e.target.value)}
+              >
+                <MenuItem value="">Tous</MenuItem>
+                {(networks as Network[]).map(n => (
+                  <MenuItem key={n.id} value={String(n.id)}>{n.name}</MenuItem>
                 ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+              </Select>
+            </FormControl>
 
-          <TablePagination
-            component="div"
-            count={filtered.length}
-            page={page}
-            onPageChange={(_, p) => setPage(p)}
-            rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            labelRowsPerPage="Lignes par page"
-            labelDisplayedRows={({ from, to, count }) => `${from}–${to} sur ${count}`}
-          />
-        </Card>
-      )}
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={featuredOnly}
+                  onChange={e => setFeaturedOnly(e.target.checked)}
+                  size="small"
+                />
+              }
+              label={<Typography variant="body2">Mis en avant</Typography>}
+              sx={{ ml: 0 }}
+            />
+          </Stack>
 
-      {/* ── Delete confirm ── */}
+          {/* Row 3: bulk actions (when selection active) */}
+          {selected.size > 0 && (
+            <>
+              <Divider sx={{ my: 1.5 }} />
+              <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+                <Typography variant="body2" color="text.secondary">
+                  {selected.size} sélectionné(s) —
+                </Typography>
+                <FormControl size="small" sx={{ minWidth: 140 }}>
+                  <InputLabel>Changer statut</InputLabel>
+                  <Select
+                    value={bulkStatus}
+                    label="Changer statut"
+                    onChange={e => setBulkStatus(e.target.value as ArticleStatus | '')}
+                  >
+                    <MenuItem value="">—</MenuItem>
+                    <MenuItem value="draft">Brouillon</MenuItem>
+                    <MenuItem value="published">Publié</MenuItem>
+                    <MenuItem value="archived">Archivé</MenuItem>
+                  </Select>
+                </FormControl>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  disabled={!bulkStatus || bulkLoading}
+                  onClick={applyBulkStatus}
+                  startIcon={bulkLoading ? <CircularProgress size={14} /> : <CheckCircle />}
+                >
+                  Appliquer
+                </Button>
+                <Button size="small" onClick={() => setSelected(new Set())}>
+                  Annuler sélection
+                </Button>
+              </Stack>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Table ─────────────────────────────────────────────────────── */}
+      <Card>
+        <Box sx={{ overflowX: 'auto' }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    indeterminate={someSelected}
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    size="small"
+                  />
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={sortCol === 'title'}
+                    direction={sortCol === 'title' ? sortDir : 'asc'}
+                    onClick={() => handleSort('title')}
+                  >
+                    Titre
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>Catégories</TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={sortCol === 'status'}
+                    direction={sortCol === 'status' ? sortDir : 'asc'}
+                    onClick={() => handleSort('status')}
+                  >
+                    Statut
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={sortCol === 'networkId'}
+                    direction={sortCol === 'networkId' ? sortDir : 'asc'}
+                    onClick={() => handleSort('networkId')}
+                  >
+                    Réseau
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={sortCol === 'createdAt'}
+                    direction={sortCol === 'createdAt' ? sortDir : 'asc'}
+                    onClick={() => handleSort('createdAt')}
+                  >
+                    Date
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loadingArticles ? (
+                Array.from({ length: 8 }).map((_, i) => (
+                  <TableRow key={i}>
+                    {Array.from({ length: 7 }).map((__, j) => (
+                      <TableCell key={j}><Skeleton /></TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : paginated.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                    <Stack alignItems="center" spacing={1}>
+                      <FilterList sx={{ opacity: 0.3, fontSize: 40 }} />
+                      <Typography color="text.secondary">Aucun article trouvé</Typography>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginated.map((article: Article) => {
+                  const isSelected = selected.has(String(article.id));
+                  const cat        = resolveCategory(article, catMap);
+                  const allCatIds  = article.categoryIds?.map(String) ?? (article.categoryId ? [String(article.categoryId)] : []);
+                  const network    = article.network ?? (article.networkId ? networkMap.get(String(article.networkId)) : null);
+
+                  return (
+                    <TableRow
+                      key={article.id}
+                      selected={isSelected}
+                      hover
+                      sx={{ '&.Mui-selected': { bgcolor: 'action.selected' } }}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={isSelected}
+                          onChange={() => toggleOne(String(article.id))}
+                          size="small"
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                          {article.featured && (
+                            <Star sx={{ color: '#FFD700', fontSize: 16 }} />
+                          )}
+                          <Box>
+                            <Typography variant="body2" fontWeight={600} noWrap sx={{ maxWidth: 260 }}>
+                              {article.title}
+                            </Typography>
+                            {article.summary && (
+                              <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 260, display: 'block' }}>
+                                {article.summary}
+                              </Typography>
+                            )}
+                          </Box>
+                        </Stack>
+                      </TableCell>
+
+                      <TableCell>
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                          {allCatIds.length > 0 ? (
+                            allCatIds.slice(0, 2).map(cid => {
+                              const c = catMap.get(cid);
+                              return c ? (
+                                <Chip
+                                  key={cid}
+                                  label={c.name}
+                                  size="small"
+                                  sx={{ bgcolor: c.color ?? 'primary.main', color: '#fff', fontSize: 11 }}
+                                />
+                              ) : null;
+                            })
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">—</Typography>
+                          )}
+                          {allCatIds.length > 2 && (
+                            <Chip label={`+${allCatIds.length - 2}`} size="small" />
+                          )}
+                        </Stack>
+                      </TableCell>
+
+                      <TableCell>
+                        <StatusChip status={article.status} />
+                      </TableCell>
+
+                      <TableCell>
+                        <Typography variant="body2" noWrap>
+                          {network?.name ?? '—'}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell>
+                        <Typography variant="caption" color="text.secondary">
+                          {article.createdAt
+                            ? new Date(article.createdAt).toLocaleDateString('fr-FR')
+                            : '—'}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={0} justifyContent="flex-end">
+                          {/* Featured toggle */}
+                          <Tooltip title={article.featured ? 'Retirer de la une' : 'Mettre en avant'}>
+                            <IconButton
+                              size="small"
+                              onClick={() => featuredMut.mutate({ id: String(article.id), featured: !article.featured })}
+                            >
+                              {article.featured ? <Star sx={{ color: '#FFD700' }} fontSize="small" /> : <StarBorder fontSize="small" />}
+                            </IconButton>
+                          </Tooltip>
+
+                          {/* Publish */}
+                          {article.status === 'draft' && (
+                            <Tooltip title="Publier">
+                              <IconButton
+                                size="small"
+                                color="success"
+                                onClick={() => statusMut.mutate({ id: String(article.id), status: 'published' })}
+                              >
+                                <CheckCircle fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+
+                          {/* Archive */}
+                          {article.status === 'published' && (
+                            <Tooltip title="Archiver">
+                              <IconButton
+                                size="small"
+                                onClick={() => statusMut.mutate({ id: String(article.id), status: 'archived' })}
+                              >
+                                <Archive fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+
+                          {/* Notify */}
+                          {article.status === 'published' && (
+                            <Tooltip title="Notifier">
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => navigate(`/notifications?articleId=${article.id}`)}
+                              >
+                                <Notifications fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+
+                          {/* Edit */}
+                          <Tooltip title="Éditer">
+                            <IconButton
+                              size="small"
+                              onClick={() => navigate(`/articles/${article.id}/edit`)}
+                            >
+                              <Edit fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+
+                          {/* Delete */}
+                          <Tooltip title="Supprimer">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => setConfirmDelete(String(article.id))}
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </Box>
+
+        <TablePagination
+          component="div"
+          count={filtered.length}
+          page={page}
+          onPageChange={(_, p) => setPage(p)}
+          rowsPerPage={PAGE_SIZE}
+          rowsPerPageOptions={[PAGE_SIZE]}
+          labelDisplayedRows={({ from, to, count }) => `${from}–${to} sur ${count}`}
+        />
+      </Card>
+
+      {/* ── Confirm delete dialog ──────────────────────────────────────── */}
       <ConfirmDialog
-        open={!!deleteTarget}
-        title="Supprimer l'article"
-        message={`Êtes-vous sûr de vouloir supprimer « ${deleteTarget?.title} » ? Cette action est irréversible.`}
+        open={!!confirmDelete}
+        title="Supprimer l'article ?"
+        message="Cette action est irréversible."
         loading={deleteMut.isPending}
-        confirmLabel="Supprimer"
-        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
-        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (confirmDelete) {
+            deleteMut.mutate(confirmDelete, { onSettled: () => setConfirmDelete(null) });
+          }
+        }}
+        onClose={() => setConfirmDelete(null)}
       />
 
-      {/* ── Snackbar ── */}
+      {/* ── Snackbar ───────────────────────────────────────────────────── */}
       <Snackbar
         open={!!snack}
-        autoHideDuration={4000}
+        autoHideDuration={3000}
         onClose={() => setSnack(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert severity={snack?.severity} onClose={() => setSnack(null)} variant="filled">
+        <Alert severity={snack?.sev} onClose={() => setSnack(null)} variant="filled">
           {snack?.msg}
         </Alert>
       </Snackbar>

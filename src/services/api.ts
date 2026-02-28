@@ -2,12 +2,15 @@ import axios from 'axios';
 import type {
   Article,
   ArticleFormData,
+  ArticleQueryParams,
   ArticleStatus,
   Category,
   CategoryFormData,
   Network,
   Notification,
+  NotifyPayload,
   ImportResult,
+  PaginatedResponse,
 } from '../types';
 
 // ── Axios instance ──────────────────────────────────────────────────────────
@@ -27,7 +30,10 @@ api.interceptors.response.use(
       error?.response?.data?.message ||
       error?.message ||
       'Une erreur est survenue';
-    return Promise.reject(new Error(msg));
+    // Preserve status code for specific handling (e.g. 409)
+    const err = new Error(msg) as Error & { status?: number };
+    err.status = error?.response?.status;
+    return Promise.reject(err);
   }
 );
 
@@ -35,7 +41,6 @@ api.interceptors.response.use(
 function toArray<T>(data: unknown): T[] {
   if (Array.isArray(data)) return data as T[];
   if (data && typeof data === 'object') {
-    // try common envelope keys
     for (const key of ['data', 'items', 'results', 'articles', 'categories', 'notifications', 'networks']) {
       const val = (data as Record<string, unknown>)[key];
       if (Array.isArray(val)) return val as T[];
@@ -45,14 +50,46 @@ function toArray<T>(data: unknown): T[] {
   return [];
 }
 
+// ── Helper: build query string from ArticleQueryParams ──────────────────────
+function buildArticleParams(params: ArticleQueryParams): Record<string, string> {
+  const q: Record<string, string> = {};
+  if (params.page   != null) q.page    = String(params.page);
+  if (params.limit  != null) q.limit   = String(params.limit);
+  if (params.search)         q.search  = params.search;
+  if (params.status)         q.status  = params.status;
+  if (params.networkId != null) q.networkId = String(params.networkId);
+  if (params.featured)       q.featured = 'true';
+  if (params.sortBy)         q.sortBy  = params.sortBy;
+  if (params.sortDir)        q.sortDir = params.sortDir;
+  if (params.categoryIds && params.categoryIds.length > 0) {
+    q.categoryIds = params.categoryIds.join(',');
+  }
+  return q;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // ARTICLES
 // ────────────────────────────────────────────────────────────────────────────
 
-/** GET /api/articles */
-export const getArticles = async (): Promise<Article[]> => {
-  const { data } = await api.get('/api/articles');
+/** GET /api/articles – with optional query params, returns paginated or array */
+export const getArticles = async (params?: ArticleQueryParams): Promise<Article[]> => {
+  const q = params ? buildArticleParams(params) : undefined;
+  const { data } = await api.get('/api/articles', { params: q });
   return toArray<Article>(data);
+};
+
+/** GET /api/articles – paginated variant */
+export const getArticlesPaginated = async (
+  params: ArticleQueryParams
+): Promise<PaginatedResponse<Article>> => {
+  const q = buildArticleParams(params);
+  const { data } = await api.get('/api/articles', { params: q });
+  // Handle both paginated and plain array responses
+  if (data && typeof data === 'object' && !Array.isArray(data) && 'data' in data) {
+    return data as PaginatedResponse<Article>;
+  }
+  const items = toArray<Article>(data);
+  return { data: items, total: items.length, page: params.page ?? 1, limit: params.limit ?? 20 };
 };
 
 /** GET /api/articles/:id */
@@ -92,9 +129,10 @@ export const patchArticleStatus = async (
 
 /** POST /api/articles/:id/notify */
 export const notifyArticle = async (
-  id: number | string
+  id: number | string,
+  payload?: NotifyPayload
 ): Promise<{ html?: string; message?: string }> => {
-  const { data } = await api.post(`/api/articles/${id}/notify`);
+  const { data } = await api.post(`/api/articles/${id}/notify`, payload ?? {});
   return data;
 };
 

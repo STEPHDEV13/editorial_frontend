@@ -1,274 +1,434 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Box from '@mui/material/Box';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import Typography from '@mui/material/Typography';
-import Chip from '@mui/material/Chip';
-import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
-import Dialog from '@mui/material/Dialog';
-import DialogTitle from '@mui/material/DialogTitle';
-import DialogContent from '@mui/material/DialogContent';
-import DialogActions from '@mui/material/DialogActions';
-import Divider from '@mui/material/Divider';
-import Snackbar from '@mui/material/Snackbar';
-import Alert from '@mui/material/Alert';
-import Skeleton from '@mui/material/Skeleton';
-import Tooltip from '@mui/material/Tooltip';
-import Select from '@mui/material/Select';
-import MenuItem from '@mui/material/MenuItem';
-import InputLabel from '@mui/material/InputLabel';
-import FormControl from '@mui/material/FormControl';
-import NotificationsIcon from '@mui/icons-material/Notifications';
-import HtmlIcon from '@mui/icons-material/Code';
-import CloseIcon from '@mui/icons-material/Close';
-import SendIcon from '@mui/icons-material/Send';
-import CircularProgress from '@mui/material/CircularProgress';
-import { alpha } from '@mui/material/styles';
+import { useSearchParams } from 'react-router-dom';
+import {
+  Box,
+  Card,
+  CardContent,
+  Grid,
+  TextField,
+  Button,
+  Typography,
+  Stack,
+  Chip,
+  Divider,
+  Snackbar,
+  Alert,
+  Skeleton,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  Paper,
+  CircularProgress,
+  Tooltip,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
+  Avatar,
+} from '@mui/material';
+import {
+  Send,
+  Close,
+  Visibility,
+  Notifications as NotifIcon,
+  Article as ArticleIcon,
+  History,
+  Email,
+} from '@mui/icons-material';
 import { getNotifications, getArticles, notifyArticle } from '../services/api';
-import { BRAND } from '../theme';
-import EmptyState from '../components/common/EmptyState';
-import BrandGradientText from '../components/branding/BrandGradientText';
-import type { Notification } from '../types';
+import type { Article, Notification, NotifyPayload } from '../types';
 
-// ── Notification row ───────────────────────────────────────────────────────
-function NotifRow({
-  notif,
-  onViewHtml,
+// ── HTML Preview Dialog ──────────────────────────────────────────────────────
+function HtmlPreviewDialog({
+  html,
+  onClose,
 }: {
-  notif:      Notification;
-  onViewHtml: (html: string, title: string) => void;
+  html: string;
+  onClose: () => void;
 }) {
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        gap: 2,
-        alignItems: 'flex-start',
-        py: 2,
-        borderBottom: '1px solid',
-        borderColor: 'divider',
-        '&:last-child': { borderBottom: 'none' },
-      }}
-    >
-      {/* Icon */}
-      <Box
-        sx={{
-          width: 38,
-          height: 38,
-          borderRadius: 2,
-          bgcolor: alpha(BRAND.blue, 0.12),
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-        }}
-      >
-        <NotificationsIcon sx={{ fontSize: 18, color: BRAND.blue }} />
-      </Box>
-
-      <Box flex={1} minWidth={0}>
-        <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
-          <Typography variant="subtitle2" fontWeight={700} noWrap>
-            {notif.title}
-          </Typography>
-          {notif.article && (
-            <Chip
-              label={notif.article.title}
-              size="small"
-              sx={{ fontSize: '0.68rem', bgcolor: alpha(BRAND.purple, 0.12), color: BRAND.purple, maxWidth: 180 }}
-            />
-          )}
-        </Box>
-        <Typography variant="body2" color="text.secondary" mt={0.3} noWrap>
-          {notif.body}
-        </Typography>
-        {notif.sentAt && (
-          <Typography variant="caption" color="text.secondary" mt={0.3} display="block">
-            Envoyée le {new Date(notif.sentAt).toLocaleString('fr-FR')}
-          </Typography>
-        )}
-      </Box>
-
-      {/* HTML preview button */}
-      {notif.html && (
-        <Tooltip title="Voir le HTML rendu">
-          <IconButton
-            size="small"
-            onClick={() => onViewHtml(notif.html!, notif.title)}
-            sx={{ color: 'text.secondary', '&:hover': { color: BRAND.blue }, flexShrink: 0 }}
-          >
-            <HtmlIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      )}
-    </Box>
+    <Dialog open maxWidth="md" fullWidth onClose={onClose}>
+      <DialogTitle>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          Prévisualisation email
+          <IconButton size="small" onClick={onClose}><Close /></IconButton>
+        </Stack>
+      </DialogTitle>
+      <DialogContent dividers sx={{ p: 0, height: 480 }}>
+        <iframe
+          srcDoc={html}
+          style={{ width: '100%', height: '100%', border: 'none' }}
+          sandbox="allow-same-origin"
+          title="Email preview"
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Fermer</Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
-// ── Main page ──────────────────────────────────────────────────────────────
+// ── Simple email template preview (front-side) ────────────────────────────────
+function buildPreviewHtml(article: Article, subject: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>${subject}</title></head>
+<body style="font-family:sans-serif;background:#f4f4f4;margin:0;padding:20px">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden">
+    ${article.imageUrl ? `<img src="${article.imageUrl}" style="width:100%;height:200px;object-fit:cover" alt="">` : ''}
+    <div style="padding:24px">
+      <h1 style="color:#2979FF;margin:0 0 8px">${article.title}</h1>
+      ${article.summary ? `<p style="color:#666;margin:0 0 16px">${article.summary}</p>` : ''}
+      <hr style="border:none;border-top:1px solid #eee;margin:16px 0">
+      <p style="color:#333;white-space:pre-wrap">${article.content?.slice(0, 300)}…</p>
+      <a href="#" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#2979FF;color:#fff;border-radius:4px;text-decoration:none">
+        Lire l'article complet
+      </a>
+    </div>
+    <div style="padding:12px 24px;background:#f8f8f8;color:#999;font-size:12px">
+      TARAM GROUP — Editorial Back Office
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// ── Notification history item ────────────────────────────────────────────────
+function NotifHistoryItem({
+  notif,
+  articleTitle,
+  onPreview,
+}: {
+  notif: Notification;
+  articleTitle?: string;
+  onPreview: (html: string) => void;
+}) {
+  const recipientCount = notif.recipientCount ?? notif.recipients?.length ?? 0;
+  const date = notif.sentAt ?? notif.createdAt;
+
+  return (
+    <ListItem
+      divider
+      alignItems="flex-start"
+      secondaryAction={
+        notif.html ? (
+          <Tooltip title="Voir l'email HTML">
+            <IconButton size="small" onClick={() => onPreview(notif.html!)}>
+              <Visibility fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        ) : undefined
+      }
+    >
+      <ListItemAvatar>
+        <Avatar sx={{ bgcolor: 'primary.dark', width: 36, height: 36 }}>
+          <Email fontSize="small" />
+        </Avatar>
+      </ListItemAvatar>
+      <ListItemText
+        primary={
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            {articleTitle && (
+              <Chip
+                icon={<ArticleIcon sx={{ fontSize: 12 }} />}
+                label={articleTitle}
+                size="small"
+                color="primary"
+                variant="outlined"
+                sx={{ maxWidth: 200 }}
+              />
+            )}
+            {notif.subject && (
+              <Typography variant="body2" fontWeight={600} noWrap>
+                {notif.subject}
+              </Typography>
+            )}
+          </Stack>
+        }
+        secondary={
+          <Stack direction="row" spacing={1} alignItems="center" mt={0.5} flexWrap="wrap">
+            {recipientCount > 0 && (
+              <Typography variant="caption" color="text.secondary">
+                {recipientCount} destinataire(s)
+              </Typography>
+            )}
+            {date && (
+              <Typography variant="caption" color="text.secondary">
+                · {new Date(date).toLocaleString('fr-FR')}
+              </Typography>
+            )}
+            {notif.status && (
+              <Chip
+                label={notif.status}
+                size="small"
+                color={notif.status === 'sent' ? 'success' : notif.status === 'failed' ? 'error' : 'default'}
+              />
+            )}
+          </Stack>
+        }
+      />
+    </ListItem>
+  );
+}
+
+// ── Main page ────────────────────────────────────────────────────────────────
 export default function NotificationsPage() {
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const preselectedArticleId = searchParams.get('articleId');
 
-  const [htmlDialog, setHtmlDialog] = useState<{ html: string; title: string } | null>(null);
-  const [selectedArticleId, setSelectedArticleId] = useState<string>('');
-  const [snack, setSnack] = useState<{ msg: string; severity: 'success' | 'error' } | null>(null);
-
-  const { data: notifications = [], isLoading } = useQuery({
+  // ── Data ──────────────────────────────────────────────────────────────
+  const { data: notifications = [], isLoading: loadingNotifs } = useQuery({
     queryKey: ['notifications'],
     queryFn:  getNotifications,
   });
 
-  const { data: articles = [] } = useQuery({
-    queryKey: ['articles'],
-    queryFn:  getArticles,
+  const { data: articles = [], isLoading: loadingArticles } = useQuery({
+    queryKey: ['articles', 'all'],
+    queryFn:  () => getArticles({ status: 'published', limit: 500 }),
   });
 
-  const publishedArticles = articles.filter((a) => a.status === 'published');
+  // ── Form state ────────────────────────────────────────────────────────
+  const [selectedArticleId, setSelectedArticleId] = useState<string>(preselectedArticleId ?? '');
+  const [recipientsInput,   setRecipientsInput]   = useState('');
+  const [subjectInput,      setSubjectInput]       = useState('');
 
-  const notifyMut = useMutation({
-    mutationFn: (id: string) => notifyArticle(id),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      setSnack({ msg: 'Notification envoyée avec succès !', severity: 'success' });
-      setSelectedArticleId('');
-      if (data.html) setHtmlDialog({ html: data.html, title: 'Notification envoyée' });
+  const selectedArticle = useMemo(
+    () => (articles as Article[]).find(a => String(a.id) === selectedArticleId) ?? null,
+    [articles, selectedArticleId]
+  );
+
+  // Pre-fill subject when article changes
+  useEffect(() => {
+    if (selectedArticle) {
+      setSubjectInput(`Nouvel article : ${selectedArticle.title}`);
+    }
+  }, [selectedArticle]);
+
+  // ── HTML preview states ────────────────────────────────────────────────
+  const [showFrontPreview, setShowFrontPreview] = useState(false);
+  const [apiHtml,          setApiHtml]          = useState<string | null>(null);
+
+  const frontPreviewHtml = useMemo(() => {
+    if (!selectedArticle) return null;
+    return buildPreviewHtml(selectedArticle, subjectInput || selectedArticle.title);
+  }, [selectedArticle, subjectInput]);
+
+  // ── Send mutation ──────────────────────────────────────────────────────
+  const [snack, setSnack] = useState<{ msg: string; sev: 'success' | 'error' } | null>(null);
+
+  const sendMut = useMutation({
+    mutationFn: () => {
+      const recipients = recipientsInput
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+      const payload: NotifyPayload = { recipients, subject: subjectInput || undefined };
+      return notifyArticle(selectedArticleId, payload);
     },
-    onError: (e: Error) => setSnack({ msg: e.message, severity: 'error' }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+      setSnack({ msg: 'Notification envoyée avec succès', sev: 'success' });
+      if (res.html) setApiHtml(res.html);
+      setRecipientsInput('');
+    },
+    onError: (e: Error) => setSnack({ msg: e.message, sev: 'error' }),
   });
+
+  // ── Sorted notifications ───────────────────────────────────────────────
+  const sortedNotifs = useMemo(() =>
+    [...notifications].sort((a: Notification, b: Notification) => {
+      const da = a.sentAt ?? a.createdAt ?? '';
+      const db = b.sentAt ?? b.createdAt ?? '';
+      return db.localeCompare(da);
+    }),
+    [notifications]
+  );
+
+  const articleTitleMap = useMemo(() => {
+    const m = new Map<string, string>();
+    (articles as Article[]).forEach(a => m.set(String(a.id), a.title));
+    return m;
+  }, [articles]);
+
+  const recipientsList = recipientsInput
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  const canSend = !!selectedArticleId && recipientsList.length > 0 && !sendMut.isPending;
 
   return (
     <Box>
-      {/* ── Send panel ── */}
-      <Card sx={{ mb: 3, border: `1px solid ${alpha(BRAND.blue, 0.2)}` }}>
-        <CardContent sx={{ p: 3 }}>
-          <BrandGradientText variant="h6" sx={{ mb: 2 }}>
-            Envoyer une notification
-          </BrandGradientText>
+      <Grid container spacing={3}>
+        {/* ── Send form ──────────────────────────────────────────────── */}
+        <Grid item xs={12} md={5}>
+          <Card>
+            <CardContent>
+              <Stack direction="row" spacing={1} alignItems="center" mb={2}>
+                <Send color="primary" />
+                <Typography variant="h6" fontWeight={700}>
+                  Envoyer une notification
+                </Typography>
+              </Stack>
 
-          <Box display="flex" gap={2} alignItems="flex-end" flexWrap="wrap">
-            <FormControl size="small" sx={{ minWidth: 300, flex: 1 }}>
-              <InputLabel>Article publié</InputLabel>
-              <Select
-                value={selectedArticleId}
-                label="Article publié"
-                onChange={(e) => setSelectedArticleId(e.target.value)}
-              >
-                <MenuItem value="">
-                  <em>Sélectionner un article…</em>
-                </MenuItem>
-                {publishedArticles.map((a) => (
-                  <MenuItem key={a.id} value={String(a.id)}>
-                    {a.title}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+              <Stack spacing={2}>
+                {/* Article selection */}
+                <FormControl fullWidth size="small">
+                  <InputLabel>Article *</InputLabel>
+                  <Select
+                    value={selectedArticleId}
+                    label="Article *"
+                    onChange={e => setSelectedArticleId(e.target.value)}
+                  >
+                    <MenuItem value=""><em>Sélectionner un article publié</em></MenuItem>
+                    {loadingArticles ? (
+                      <MenuItem disabled><CircularProgress size={16} /></MenuItem>
+                    ) : (
+                      (articles as Article[]).map(a => (
+                        <MenuItem key={a.id} value={String(a.id)}>
+                          {a.title}
+                        </MenuItem>
+                      ))
+                    )}
+                  </Select>
+                </FormControl>
 
-            <Button
-              variant="contained"
-              startIcon={
-                notifyMut.isPending
-                  ? <CircularProgress size={16} color="inherit" />
-                  : <SendIcon />
-              }
-              disabled={!selectedArticleId || notifyMut.isPending}
-              onClick={() => notifyMut.mutate(selectedArticleId)}
-              sx={{ backgroundImage: BRAND.gradient, whiteSpace: 'nowrap', minWidth: 180 }}
-            >
-              {notifyMut.isPending ? 'Envoi…' : 'Envoyer la notification'}
-            </Button>
-          </Box>
+                {/* Subject */}
+                <TextField
+                  label="Sujet de l'email"
+                  fullWidth
+                  size="small"
+                  value={subjectInput}
+                  onChange={e => setSubjectInput(e.target.value)}
+                  placeholder="Sujet automatique si vide"
+                />
 
-          {publishedArticles.length === 0 && (
-            <Typography variant="caption" color="text.secondary" display="block" mt={1}>
-              Aucun article publié disponible. Publiez un article pour pouvoir envoyer une notification.
-            </Typography>
-          )}
-        </CardContent>
-      </Card>
+                {/* Recipients */}
+                <TextField
+                  label="Destinataires *"
+                  fullWidth
+                  size="small"
+                  multiline
+                  rows={3}
+                  value={recipientsInput}
+                  onChange={e => setRecipientsInput(e.target.value)}
+                  placeholder="email1@ex.com, email2@ex.com, …"
+                  helperText={
+                    recipientsList.length > 0
+                      ? `${recipientsList.length} destinataire(s) détecté(s)`
+                      : 'Séparer les adresses par des virgules'
+                  }
+                />
 
-      {/* ── History ── */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h6" fontWeight={700}>
-          Historique ({notifications.length})
-        </Typography>
-      </Box>
+                {/* Recipient chips preview */}
+                {recipientsList.length > 0 && (
+                  <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                    {recipientsList.slice(0, 8).map(r => (
+                      <Chip key={r} label={r} size="small" variant="outlined" />
+                    ))}
+                    {recipientsList.length > 8 && (
+                      <Chip label={`+${recipientsList.length - 8}`} size="small" />
+                    )}
+                  </Stack>
+                )}
 
-      <Card>
-        <CardContent sx={{ p: 3, pb: '24px !important' }}>
-          {isLoading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <Box key={i} display="flex" gap={2} py={2}>
-                <Skeleton variant="rounded" width={38} height={38} />
-                <Box flex={1}>
-                  <Skeleton height={20} width="60%" />
-                  <Skeleton height={16} width="80%" sx={{ mt: 0.5 }} />
-                </Box>
-              </Box>
-            ))
-          ) : notifications.length === 0 ? (
-            <EmptyState
-              title="Aucune notification"
-              description="Les notifications envoyées apparaîtront ici."
-            />
-          ) : (
-            notifications.map((n) => (
-              <NotifRow
-                key={n.id}
-                notif={n}
-                onViewHtml={(html, title) => setHtmlDialog({ html, title })}
-              />
-            ))
-          )}
-        </CardContent>
-      </Card>
+                <Stack direction="row" spacing={1}>
+                  {/* Front preview */}
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<Visibility />}
+                    disabled={!selectedArticle}
+                    onClick={() => setShowFrontPreview(true)}
+                  >
+                    Prévisualiser
+                  </Button>
 
-      {/* ── HTML preview dialog ── */}
-      <Dialog
-        open={!!htmlDialog}
-        onClose={() => setHtmlDialog(null)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700 }}>
-          {htmlDialog?.title ?? 'Aperçu HTML'}
-          <IconButton size="small" onClick={() => setHtmlDialog(null)}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <Divider />
-        <DialogContent sx={{ p: 0 }}>
-          {htmlDialog && (
-            <Box
-              component="iframe"
-              srcDoc={htmlDialog.html}
-              title="notification-html"
-              sx={{
-                width: '100%',
-                minHeight: 480,
-                border: 'none',
-                bgcolor: '#fff',
-              }}
-            />
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => setHtmlDialog(null)} variant="outlined" size="small" color="inherit">
-            Fermer
-          </Button>
-        </DialogActions>
-      </Dialog>
+                  {/* Send */}
+                  <Button
+                    variant="contained"
+                    startIcon={sendMut.isPending ? <CircularProgress size={16} color="inherit" /> : <Send />}
+                    disabled={!canSend}
+                    onClick={() => sendMut.mutate()}
+                    sx={{ flexGrow: 1 }}
+                  >
+                    Envoyer
+                  </Button>
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
 
-      {/* ── Snackbar ── */}
+        {/* ── History ────────────────────────────────────────────────── */}
+        <Grid item xs={12} md={7}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+                <History color="primary" />
+                <Typography variant="h6" fontWeight={700}>
+                  Historique
+                </Typography>
+                <Chip label={notifications.length} size="small" color="primary" />
+              </Stack>
+              <Divider sx={{ mb: 1 }} />
+
+              {loadingNotifs ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} height={64} sx={{ mb: 1 }} />
+                ))
+              ) : sortedNotifs.length === 0 ? (
+                <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', borderRadius: 2, mt: 1 }}>
+                  <NotifIcon sx={{ fontSize: 40, opacity: 0.2, mb: 1 }} />
+                  <Typography color="text.secondary">Aucune notification envoyée</Typography>
+                </Paper>
+              ) : (
+                <List dense disablePadding sx={{ maxHeight: 520, overflowY: 'auto' }}>
+                  {sortedNotifs.map((n: Notification) => (
+                    <NotifHistoryItem
+                      key={n.id}
+                      notif={n}
+                      articleTitle={
+                        n.article?.title
+                          ?? (n.articleId ? articleTitleMap.get(String(n.articleId)) : undefined)
+                      }
+                      onPreview={html => setApiHtml(html)}
+                    />
+                  ))}
+                </List>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* ── Front-side preview dialog ──────────────────────────────────── */}
+      {showFrontPreview && frontPreviewHtml && (
+        <HtmlPreviewDialog html={frontPreviewHtml} onClose={() => setShowFrontPreview(false)} />
+      )}
+
+      {/* ── API response HTML preview dialog ──────────────────────────── */}
+      {apiHtml && (
+        <HtmlPreviewDialog html={apiHtml} onClose={() => setApiHtml(null)} />
+      )}
+
+      {/* ── Snackbar ──────────────────────────────────────────────────── */}
       <Snackbar
         open={!!snack}
         autoHideDuration={4000}
         onClose={() => setSnack(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert severity={snack?.severity} onClose={() => setSnack(null)} variant="filled">
+        <Alert severity={snack?.sev} onClose={() => setSnack(null)} variant="filled">
           {snack?.msg}
         </Alert>
       </Snackbar>

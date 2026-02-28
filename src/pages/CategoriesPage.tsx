@@ -1,363 +1,403 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import TextField from '@mui/material/TextField';
-import Button from '@mui/material/Button';
-import Typography from '@mui/material/Typography';
-import Snackbar from '@mui/material/Snackbar';
-import Alert from '@mui/material/Alert';
-import IconButton from '@mui/material/IconButton';
-import Tooltip from '@mui/material/Tooltip';
-import Divider from '@mui/material/Divider';
-import CircularProgress from '@mui/material/CircularProgress';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import AddIcon from '@mui/icons-material/Add';
-import CheckIcon from '@mui/icons-material/Check';
-import CloseIcon from '@mui/icons-material/Close';
-import { alpha } from '@mui/material/styles';
-import { getCategories, createCategory, updateCategory, deleteCategory } from '../services/api';
-import { BRAND } from '../theme';
-import LoadingState from '../components/common/LoadingState';
-import EmptyState from '../components/common/EmptyState';
+import {
+  Box,
+  Grid,
+  Card,
+  CardContent,
+  CardActions,
+  TextField,
+  Button,
+  Typography,
+  Stack,
+  Chip,
+  IconButton,
+  Tooltip,
+  Snackbar,
+  Alert,
+  Skeleton,
+  Collapse,
+  Divider,
+  Paper,
+} from '@mui/material';
+import { Add, Edit, Delete, Check, Close, Category as CategoryIcon } from '@mui/icons-material';
+import { getCategories, createCategory, updateCategory, deleteCategory, getArticles } from '../services/api';
 import ConfirmDialog from '../components/common/ConfirmDialog';
-import BrandGradientText from '../components/branding/BrandGradientText';
-import type { Category } from '../types';
+import type { Category, CategoryFormData, Article } from '../types';
 
-// ── Palette of preset colors ───────────────────────────────────────────────
-const PRESET_COLORS = [
-  '#2979FF', '#7B2FBE', '#00E676', '#FFB74D',
-  '#FF4D6D', '#40C4FF', '#F06292', '#A5D6A7',
-  '#CE93D8', '#80DEEA',
-];
-
-// ── Validation ────────────────────────────────────────────────────────────
+// ── Validation schema ────────────────────────────────────────────────────────
 const schema = z.object({
   name:        z.string().min(1, 'Nom requis').max(100),
   color:       z.string().optional(),
-  description: z.string().max(300).optional(),
+  description: z.string().max(500).optional().or(z.literal('')),
 });
 type FormValues = z.infer<typeof schema>;
 
-// ── Category card ─────────────────────────────────────────────────────────
-function CategoryCard({
-  category,
-  onEdit,
-  onDelete,
+// ── Preset colors ────────────────────────────────────────────────────────────
+const PRESET_COLORS = [
+  '#2979FF', '#7B2FBE', '#4CAF50', '#FF9800', '#F44336',
+  '#00BCD4', '#E91E63', '#8BC34A', '#9C27B0', '#03A9F4',
+];
+
+function ColorPicker({
+  value,
+  onChange,
 }: {
-  category: Category;
-  onEdit:   (c: Category) => void;
-  onDelete: (c: Category) => void;
+  value?: string;
+  onChange: (c: string) => void;
 }) {
-  const color = category.color ?? BRAND.purple;
   return (
-    <Card
-      sx={{
-        border: `1px solid ${alpha(color, 0.35)}`,
-        transition: 'border-color 0.2s',
-        '&:hover': { borderColor: alpha(color, 0.7) },
-      }}
-    >
-      <CardContent sx={{ p: 2.5, pb: '16px !important' }}>
-        <Box display="flex" alignItems="center" gap={1.5} mb={1}>
-          {/* Color dot */}
+    <Stack direction="row" spacing={0.5} flexWrap="wrap">
+      {PRESET_COLORS.map(c => (
+        <Box
+          key={c}
+          onClick={() => onChange(c)}
+          sx={{
+            width: 28, height: 28, borderRadius: '50%',
+            bgcolor: c,
+            cursor: 'pointer',
+            border: value === c ? '3px solid white' : '3px solid transparent',
+            boxShadow: value === c ? `0 0 0 2px ${c}` : 'none',
+            transition: 'box-shadow 0.15s',
+            '&:hover': { boxShadow: `0 0 0 2px ${c}` },
+          }}
+        />
+      ))}
+    </Stack>
+  );
+}
+
+// ── Category card ────────────────────────────────────────────────────────────
+interface CategoryCardProps {
+  category:     Category;
+  articleCount: number;
+  onEdit:       (c: Category) => void;
+  onDelete:     (c: Category) => void;
+}
+function CategoryCard({ category, articleCount, onEdit, onDelete }: CategoryCardProps) {
+  return (
+    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <CardContent sx={{ flexGrow: 1 }}>
+        <Stack direction="row" spacing={1.5} alignItems="flex-start">
           <Box
             sx={{
-              width: 14,
-              height: 14,
-              borderRadius: '50%',
-              bgcolor: color,
+              width: 16, height: 16, borderRadius: '50%', mt: 0.5,
+              bgcolor: category.color ?? '#2979FF',
               flexShrink: 0,
-              boxShadow: `0 0 8px ${alpha(color, 0.5)}`,
+              boxShadow: `0 0 8px ${category.color ?? '#2979FF'}88`,
             }}
           />
-          <Typography variant="subtitle2" fontWeight={700} noWrap flex={1}>
-            {category.name}
-          </Typography>
-          <Box display="flex" gap={0.5}>
-            <Tooltip title="Modifier">
-              <IconButton
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Stack direction="row" spacing={1} alignItems="center" mb={0.5}>
+              <Typography variant="subtitle1" fontWeight={700} noWrap>
+                {category.name}
+              </Typography>
+              <Chip
+                label={articleCount}
                 size="small"
-                onClick={() => onEdit(category)}
-                sx={{ color: 'text.secondary', '&:hover': { color: BRAND.blue } }}
-              >
-                <EditIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Supprimer">
-              <IconButton
-                size="small"
-                onClick={() => onDelete(category)}
-                sx={{ color: 'text.secondary', '&:hover': { color: '#FF4D6D' } }}
-              >
-                <DeleteIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </Tooltip>
+                color="primary"
+                title={`${articleCount} article(s)`}
+              />
+            </Stack>
+            {category.slug && (
+              <Typography variant="caption" color="text.secondary" fontFamily="monospace">
+                /{category.slug}
+              </Typography>
+            )}
+            {category.description && (
+              <Typography variant="body2" color="text.secondary" mt={0.5} sx={{
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}>
+                {category.description}
+              </Typography>
+            )}
           </Box>
-        </Box>
-        {category.slug && (
-          <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.72rem' }}>
-            /{category.slug}
-          </Typography>
-        )}
-        {category.description && (
-          <Typography variant="body2" color="text.secondary" mt={0.5} sx={{ fontSize: '0.8rem' }} noWrap>
-            {category.description}
-          </Typography>
-        )}
+        </Stack>
       </CardContent>
+      <Divider />
+      <CardActions sx={{ justifyContent: 'flex-end', py: 0.5 }}>
+        <Tooltip title="Modifier">
+          <IconButton size="small" onClick={() => onEdit(category)}>
+            <Edit fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title={articleCount > 0 ? `Utilisée par ${articleCount} article(s) — suppression impossible` : 'Supprimer'}>
+          <span>
+            <IconButton
+              size="small"
+              color="error"
+              onClick={() => onDelete(category)}
+              disabled={articleCount > 0}
+            >
+              <Delete fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </CardActions>
     </Card>
   );
 }
 
-// ── Main page ──────────────────────────────────────────────────────────────
+// ── Main page ────────────────────────────────────────────────────────────────
 export default function CategoriesPage() {
-  const queryClient = useQueryClient();
-
-  const [editTarget,   setEditTarget]   = useState<Category | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
-  const [showForm,     setShowForm]     = useState(false);
-  const [snack, setSnack] = useState<{ msg: string; severity: 'success' | 'error' } | null>(null);
+  const qc = useQueryClient();
 
   const { data: categories = [], isLoading } = useQuery({
     queryKey: ['categories'],
     queryFn:  getCategories,
   });
 
+  const { data: articles = [] } = useQuery({
+    queryKey: ['articles', 'all'],
+    queryFn:  () => getArticles({ limit: 2000 }),
+  });
+
+  // Compute article count per category
+  const articleCountByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    (articles as Article[]).forEach(a => {
+      const ids = a.categoryIds?.map(String) ?? (a.categoryId ? [String(a.categoryId)] : []);
+      ids.forEach(id => map.set(id, (map.get(id) ?? 0) + 1));
+    });
+    return map;
+  }, [articles]);
+
+  // ── Form state ──────────────────────────────────────────────────────
+  const [formOpen,  setFormOpen]  = useState(false);
+  const [editTarget, setEditTarget] = useState<Category | null>(null);
+
   const {
-    control, handleSubmit, reset, setValue, watch,
+    register,
+    handleSubmit,
+    control,
+    reset,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: '', color: BRAND.blue, description: '' },
+    defaultValues: { name: '', color: PRESET_COLORS[0], description: '' },
   });
-  const watchColor = watch('color');
 
-  // Open form for new category
-  const openNew = () => {
+  const openCreate = () => {
     setEditTarget(null);
-    reset({ name: '', color: BRAND.blue, description: '' });
-    setShowForm(true);
+    reset({ name: '', color: PRESET_COLORS[0], description: '' });
+    setFormOpen(true);
   };
 
-  // Open form for editing
   const openEdit = (cat: Category) => {
     setEditTarget(cat);
-    reset({ name: cat.name, color: cat.color ?? BRAND.blue, description: cat.description ?? '' });
-    setShowForm(true);
+    reset({ name: cat.name, color: cat.color ?? PRESET_COLORS[0], description: cat.description ?? '' });
+    setFormOpen(true);
   };
 
-  const cancelForm = () => {
-    setShowForm(false);
+  const closeForm = () => {
+    setFormOpen(false);
     setEditTarget(null);
-    reset();
   };
 
-  // ── Mutations ──
-  const saveMut = useMutation({
-    mutationFn: (values: FormValues) =>
-      editTarget
-        ? updateCategory(editTarget.id, values)
-        : createCategory(values),
+  // ── Confirm delete ──────────────────────────────────────────────────
+  const [confirmDelete, setConfirmDelete] = useState<Category | null>(null);
+
+  // ── Snackbar ──────────────────────────────────────────────────────
+  const [snack, setSnack] = useState<{ msg: string; sev: 'success' | 'error' | 'warning' } | null>(null);
+
+  // ── Mutations ─────────────────────────────────────────────────────
+  const createMut = useMutation({
+    mutationFn: (data: CategoryFormData) => createCategory(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
-      setSnack({ msg: editTarget ? 'Catégorie mise à jour.' : 'Catégorie créée.', severity: 'success' });
-      cancelForm();
+      qc.invalidateQueries({ queryKey: ['categories'] });
+      setSnack({ msg: 'Catégorie créée', sev: 'success' });
+      closeForm();
     },
-    onError: (e: Error) => {
-      const is409 = e.message.toLowerCase().includes('409') || e.message.toLowerCase().includes('exist');
-      setSnack({
-        msg: is409 ? 'Cette catégorie existe déjà.' : e.message,
-        severity: 'error',
-      });
+    onError: (e: Error) => setSnack({ msg: e.message, sev: 'error' }),
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }: { id: string | number; data: CategoryFormData }) =>
+      updateCategory(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['categories'] });
+      setSnack({ msg: 'Catégorie modifiée', sev: 'success' });
+      closeForm();
     },
+    onError: (e: Error) => setSnack({ msg: e.message, sev: 'error' }),
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: number | string) => deleteCategory(id),
+    mutationFn: (id: string | number) => deleteCategory(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
-      setSnack({ msg: 'Catégorie supprimée.', severity: 'success' });
-      setDeleteTarget(null);
+      qc.invalidateQueries({ queryKey: ['categories'] });
+      setSnack({ msg: 'Catégorie supprimée', sev: 'success' });
+      setConfirmDelete(null);
     },
-    onError: (e: Error) => setSnack({ msg: e.message, severity: 'error' }),
+    onError: (e: Error & { status?: number }) => {
+      setConfirmDelete(null);
+      if (e.status === 409) {
+        setSnack({ msg: 'Impossible de supprimer: catégorie utilisée par des articles', sev: 'warning' });
+      } else {
+        setSnack({ msg: e.message, sev: 'error' });
+      }
+    },
   });
 
-  if (isLoading) return <LoadingState />;
+  const onSubmit = (values: FormValues) => {
+    const payload: CategoryFormData = {
+      name:        values.name,
+      color:       values.color,
+      description: values.description || undefined,
+    };
+    if (editTarget) updateMut.mutate({ id: editTarget.id, data: payload });
+    else            createMut.mutate(payload);
+  };
+
+  const handleDeleteRequest = (cat: Category) => {
+    const count = articleCountByCategory.get(String(cat.id)) ?? 0;
+    if (count > 0) {
+      setSnack({ msg: `Impossible: ${count} article(s) utilisent cette catégorie`, sev: 'warning' });
+      return;
+    }
+    setConfirmDelete(cat);
+  };
+
+  const isSaving = createMut.isPending || updateMut.isPending;
 
   return (
     <Box>
-      {/* ── Header ── */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={2}>
-        <BrandGradientText variant="h5">
-          {categories.length} Catégorie{categories.length !== 1 ? 's' : ''}
-        </BrandGradientText>
+      {/* ── Header ──────────────────────────────────────────────────── */}
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <CategoryIcon color="primary" />
+          <Typography variant="h6" fontWeight={700}>
+            Catégories
+          </Typography>
+          <Chip label={(categories as Category[]).length} size="small" color="primary" />
+        </Stack>
         <Button
           variant="contained"
-          startIcon={<AddIcon />}
-          onClick={openNew}
-          sx={{ backgroundImage: BRAND.gradient }}
+          startIcon={<Add />}
+          onClick={openCreate}
         >
           Nouvelle catégorie
         </Button>
-      </Box>
+      </Stack>
 
-      {/* ── Inline form ── */}
-      {showForm && (
-        <Card sx={{ mb: 3, border: `1px solid ${alpha(BRAND.blue, 0.4)}` }}>
-          <CardContent sx={{ p: 3 }}>
-            <Typography variant="subtitle1" fontWeight={700} mb={2}>
-              {editTarget ? 'Modifier la catégorie' : 'Nouvelle catégorie'}
-            </Typography>
-            <form onSubmit={handleSubmit((v) => saveMut.mutate(v))} noValidate>
-              <Grid container spacing={2} alignItems="flex-start">
-                <Grid item xs={12} sm={4}>
-                  <Controller
-                    name="name"
-                    control={control}
-                    render={({ field }) => (
-                      <TextField
-                        {...field}
-                        label="Nom *"
-                        fullWidth
-                        size="small"
-                        error={!!errors.name}
-                        helperText={errors.name?.message}
-                        autoFocus
-                      />
-                    )}
-                  />
-                </Grid>
+      {/* ── Inline form ─────────────────────────────────────────────── */}
+      <Collapse in={formOpen} unmountOnExit>
+        <Paper
+          variant="outlined"
+          component="form"
+          onSubmit={handleSubmit(onSubmit)}
+          sx={{ p: 2, mb: 3, borderRadius: 2 }}
+        >
+          <Typography variant="subtitle1" fontWeight={700} mb={2}>
+            {editTarget ? `Modifier "${editTarget.name}"` : 'Nouvelle catégorie'}
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Nom *"
+                fullWidth
+                size="small"
+                {...register('name')}
+                error={!!errors.name}
+                helperText={errors.name?.message}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Description"
+                fullWidth
+                size="small"
+                {...register('description')}
+                error={!!errors.description}
+                helperText={errors.description?.message}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="body2" color="text.secondary" mb={1}>
+                Couleur
+              </Typography>
+              <Controller
+                name="color"
+                control={control}
+                render={({ field }) => (
+                  <ColorPicker value={field.value} onChange={field.onChange} />
+                )}
+              />
+            </Grid>
+          </Grid>
+          <Stack direction="row" spacing={1} mt={2} justifyContent="flex-end">
+            <Button size="small" startIcon={<Close />} onClick={closeForm}>
+              Annuler
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              size="small"
+              startIcon={<Check />}
+              disabled={isSaving}
+            >
+              {editTarget ? 'Enregistrer' : 'Créer'}
+            </Button>
+          </Stack>
+        </Paper>
+      </Collapse>
 
-                <Grid item xs={12} sm={4}>
-                  <Controller
-                    name="description"
-                    control={control}
-                    render={({ field }) => (
-                      <TextField
-                        {...field}
-                        label="Description"
-                        fullWidth
-                        size="small"
-                        error={!!errors.description}
-                        helperText={errors.description?.message}
-                      />
-                    )}
-                  />
-                </Grid>
-
-                {/* Color picker */}
-                <Grid item xs={12} sm={4}>
-                  <Typography variant="caption" color="text.secondary" display="block" mb={0.8}>
-                    Couleur
-                  </Typography>
-                  <Box display="flex" gap={0.8} flexWrap="wrap" alignItems="center">
-                    {PRESET_COLORS.map((c) => (
-                      <Box
-                        key={c}
-                        onClick={() => setValue('color', c)}
-                        sx={{
-                          width: 22,
-                          height: 22,
-                          borderRadius: '50%',
-                          bgcolor: c,
-                          cursor: 'pointer',
-                          border: watchColor === c ? `2px solid white` : '2px solid transparent',
-                          boxShadow: watchColor === c ? `0 0 8px ${alpha(c, 0.7)}` : undefined,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'transform 0.15s',
-                          '&:hover': { transform: 'scale(1.2)' },
-                        }}
-                      >
-                        {watchColor === c && <CheckIcon sx={{ fontSize: 12, color: '#fff' }} />}
-                      </Box>
-                    ))}
-                  </Box>
-                </Grid>
-
-                <Grid item xs={12}>
-                  <Divider sx={{ mb: 1 }} />
-                  <Box display="flex" gap={1.5}>
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      size="small"
-                      startIcon={
-                        saveMut.isPending
-                          ? <CircularProgress size={14} color="inherit" />
-                          : <CheckIcon />
-                      }
-                      disabled={saveMut.isPending}
-                      sx={{ backgroundImage: BRAND.gradient }}
-                    >
-                      {saveMut.isPending ? 'Enregistrement…' : 'Enregistrer'}
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      startIcon={<CloseIcon />}
-                      onClick={cancelForm}
-                      sx={{ borderColor: 'divider', color: 'text.secondary' }}
-                    >
-                      Annuler
-                    </Button>
-                  </Box>
-                </Grid>
-              </Grid>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── Categories grid ── */}
-      {categories.length === 0 ? (
-        <EmptyState
-          title="Aucune catégorie"
-          description="Créez votre première catégorie pour organiser vos articles."
-          actionLabel="Créer une catégorie"
-          onAction={openNew}
-        />
+      {/* ── Grid of category cards ────────────────────────────────────── */}
+      {isLoading ? (
+        <Grid container spacing={2}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Grid item xs={12} sm={6} md={4} lg={3} key={i}>
+              <Skeleton height={120} variant="rounded" />
+            </Grid>
+          ))}
+        </Grid>
+      ) : (categories as Category[]).length === 0 ? (
+        <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderRadius: 2 }}>
+          <CategoryIcon sx={{ fontSize: 48, opacity: 0.2, mb: 1 }} />
+          <Typography color="text.secondary">Aucune catégorie</Typography>
+          <Button startIcon={<Add />} onClick={openCreate} sx={{ mt: 1 }}>
+            Créer une catégorie
+          </Button>
+        </Paper>
       ) : (
         <Grid container spacing={2}>
-          {categories.map((cat) => (
+          {(categories as Category[]).map(cat => (
             <Grid item xs={12} sm={6} md={4} lg={3} key={cat.id}>
               <CategoryCard
                 category={cat}
+                articleCount={articleCountByCategory.get(String(cat.id)) ?? 0}
                 onEdit={openEdit}
-                onDelete={(c) => setDeleteTarget(c)}
+                onDelete={handleDeleteRequest}
               />
             </Grid>
           ))}
         </Grid>
       )}
 
-      {/* ── Delete confirm ── */}
+      {/* ── Confirm delete dialog ──────────────────────────────────── */}
       <ConfirmDialog
-        open={!!deleteTarget}
-        title="Supprimer la catégorie"
-        message={`Supprimer « ${deleteTarget?.name} » ? Les articles associés ne seront pas supprimés mais perdront cette catégorie.`}
+        open={!!confirmDelete}
+        title={`Supprimer "${confirmDelete?.name}" ?`}
+        message="Cette catégorie sera définitivement supprimée."
         loading={deleteMut.isPending}
-        confirmLabel="Supprimer"
-        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
-        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => confirmDelete && deleteMut.mutate(confirmDelete.id)}
+        onClose={() => setConfirmDelete(null)}
       />
 
-      {/* ── Snackbar ── */}
+      {/* ── Snackbar ──────────────────────────────────────────────── */}
       <Snackbar
         open={!!snack}
-        autoHideDuration={5000}
+        autoHideDuration={4000}
         onClose={() => setSnack(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert severity={snack?.severity} onClose={() => setSnack(null)} variant="filled">
+        <Alert severity={snack?.sev} onClose={() => setSnack(null)} variant="filled">
           {snack?.msg}
         </Alert>
       </Snackbar>
