@@ -67,6 +67,13 @@ export interface Network {
   name:         string;
   slug?:        string;
   description?: string;
+  articleCount?: number;
+}
+
+export interface NetworkFormData {
+  name:         string;
+  slug?:        string;
+  description?: string;
 }
 
 // ── Notification ───────────────────────────────────────────────────────────

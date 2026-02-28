@@ -13,6 +13,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import ArticleIcon from '@mui/icons-material/Article';
 import CategoryIcon from '@mui/icons-material/Category';
 import NotificationsIcon from '@mui/icons-material/Notifications';
+import HubIcon from '@mui/icons-material/Hub';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -33,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard',     path: '/',              icon: <DashboardIcon /> },
   { label: 'Articles',      path: '/articles',      icon: <ArticleIcon /> },
   { label: 'Catégories',    path: '/categories',    icon: <CategoryIcon /> },
+  { label: 'Réseaux',       path: '/networks',      icon: <HubIcon /> },
   { label: 'Notifications', path: '/notifications', icon: <NotificationsIcon /> },
   { label: 'Import',        path: '/import',        icon: <UploadFileIcon /> },
 ];
