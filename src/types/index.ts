@@ -2,21 +2,22 @@
 export type ArticleStatus = 'draft' | 'published' | 'archived';
 
 export interface Article {
-  id:          number | string;
-  title:       string;
-  content:     string;
-  summary?:    string;
-  slug?:       string;
-  status:      ArticleStatus;
-  featured:    boolean;
-  imageUrl?:   string | null;
-  categoryId?: number | string | null;
-  category?:   Category | null;
-  networkId?:  number | string | null;
-  network?:    Network | null;
+  id:           number | string;
+  title:        string;
+  content:      string;
+  summary?:     string;
+  slug?:        string;
+  status:       ArticleStatus;
+  featured:     boolean;
+  imageUrl?:    string | null;
+  categoryId?:  number | string | null;
+  categoryIds?: string[];
+  category?:    Category | null;
+  networkId?:   number | string | null;
+  network?:     Network | null;
   publishedAt?: string | null;
-  createdAt?:  string;
-  updatedAt?:  string;
+  createdAt?:   string;
+  updatedAt?:   string;
 }
 
 export interface ArticleFormData {

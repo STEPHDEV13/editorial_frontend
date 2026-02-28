@@ -33,7 +33,7 @@ import StatusChip from '../components/common/StatusChip';
 import LoadingState from '../components/common/LoadingState';
 import EmptyState from '../components/common/EmptyState';
 import ConfirmDialog from '../components/common/ConfirmDialog';
-import { getArticles, deleteArticle, patchArticleStatus, notifyArticle } from '../services/api';
+import { getArticles, deleteArticle, patchArticleStatus, notifyArticle, getCategories } from '../services/api';
 import { BRAND } from '../theme';
 import type { Article, ArticleStatus } from '../types';
 
@@ -56,6 +56,13 @@ export default function ArticlesPage() {
     queryKey: ['articles'],
     queryFn:  getArticles,
   });
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn:  getCategories,
+  });
+
+  const categoryMap = Object.fromEntries(categories.map((c) => [String(c.id), c]));
 
   // ── Mutations ──
   const deleteMut = useMutation({
@@ -190,22 +197,26 @@ export default function ArticlesPage() {
                     </TableCell>
 
                     <TableCell>
-                      {article.category ? (
-                        <Chip
-                          label={article.category.name}
-                          size="small"
-                          sx={{
-                            fontSize: '0.72rem',
-                            bgcolor: article.category.color
-                              ? alpha(article.category.color, 0.18)
-                              : alpha(BRAND.purple, 0.14),
-                            color: article.category.color ?? BRAND.purple,
-                            fontWeight: 600,
-                          }}
-                        />
-                      ) : (
-                        <Typography variant="caption" color="text.secondary">—</Typography>
-                      )}
+                      {(() => {
+                        const firstId = article.categoryIds?.[0] ?? (article.categoryId ? String(article.categoryId) : undefined);
+                        const cat = firstId ? categoryMap[firstId] : null;
+                        return cat ? (
+                          <Chip
+                            label={cat.name}
+                            size="small"
+                            sx={{
+                              fontSize: '0.72rem',
+                              bgcolor: cat.color
+                                ? alpha(cat.color, 0.18)
+                                : alpha(BRAND.purple, 0.14),
+                              color: cat.color ?? BRAND.purple,
+                              fontWeight: 600,
+                            }}
+                          />
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">—</Typography>
+                        );
+                      })()}
                     </TableCell>
 
                     <TableCell>
