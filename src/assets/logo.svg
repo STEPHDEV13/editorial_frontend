@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 140" fill="none" role="img" aria-label="TARAM GROUP logo">
+  <defs>
+    <linearGradient id="brandGrad" x1="0" y1="0" x2="160" y2="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2979FF"/>
+      <stop offset="55%" stop-color="#5040D8"/>
+      <stop offset="100%" stop-color="#7B2FBE"/>
+    </linearGradient>
+    <linearGradient id="circuitGrad" x1="0" y1="0" x2="80" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2979FF"/>
+      <stop offset="100%" stop-color="#3D5FDB"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ── Circuit board elements (left side) ── -->
+  <!-- Main horizontal bus -->
+  <line x1="6" y1="60" x2="58" y2="60" stroke="url(#circuitGrad)" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Branch up from x=22 -->
+  <line x1="22" y1="60" x2="22" y2="38" stroke="url(#circuitGrad)" stroke-width="2"/>
+  <!-- Branch down from x=38 -->
+  <line x1="38" y1="60" x2="38" y2="78" stroke="url(#circuitGrad)" stroke-width="2"/>
+  <!-- Secondary trace top -->
+  <line x1="22" y1="38" x2="12" y2="28" stroke="url(#circuitGrad)" stroke-width="2"/>
+  <line x1="12" y1="28" x2="12" y2="14" stroke="url(#circuitGrad)" stroke-width="1.8"/>
+  <!-- Secondary trace bottom -->
+  <line x1="38" y1="78" x2="50" y2="90" stroke="url(#circuitGrad)" stroke-width="1.8"/>
+  <!-- Cross trace -->
+  <line x1="6" y1="60" x2="6" y2="76" stroke="url(#circuitGrad)" stroke-width="1.8"/>
+  <line x1="6" y1="76" x2="22" y2="76" stroke="url(#circuitGrad)" stroke-width="1.8"/>
+  <!-- Extra small trace -->
+  <line x1="22" y1="38" x2="35" y2="38" stroke="url(#circuitGrad)" stroke-width="1.5"/>
+  <line x1="35" y1="38" x2="35" y2="30" stroke="url(#circuitGrad)" stroke-width="1.5"/>
+
+  <!-- Circuit nodes (filled circles) -->
+  <circle cx="6"  cy="60" r="4.5" fill="#2979FF"/>
+  <circle cx="22" cy="60" r="3.5" fill="#2979FF"/>
+  <circle cx="38" cy="60" r="3.5" fill="#3060E0"/>
+  <circle cx="22" cy="38" r="4"   fill="#2979FF"/>
+  <circle cx="22" cy="76" r="3"   fill="#2979FF"/>
+  <circle cx="12" cy="14" r="4.5" fill="#2979FF"/>
+
+  <!-- Circuit pads (squares) -->
+  <rect x="8"  y="22" width="8" height="8" rx="1.5" fill="#2979FF"/>
+  <rect x="2"  y="70" width="7" height="7" rx="1.5" fill="#2368EE"/>
+  <rect x="46" y="86" width="7" height="7" rx="1"   fill="#3A52D8"/>
+  <rect x="32" y="25" width="6" height="6" rx="1"   fill="#2979FF" opacity="0.8"/>
+
+  <!-- Floating micro-dots (PCB aesthetic) -->
+  <circle cx="52" cy="46" r="2.5" fill="#2979FF" opacity="0.7"/>
+  <circle cx="44" cy="32" r="2"   fill="#2979FF" opacity="0.55"/>
+  <circle cx="58" cy="72" r="2"   fill="#3A52D8" opacity="0.6"/>
+
+  <!-- ── Bird silhouette – ibis/flamingo ── -->
+  <!-- Head -->
+  <ellipse cx="122" cy="22" rx="11" ry="12" fill="url(#brandGrad)"/>
+  <!-- Beak (curved, pointing right) -->
+  <path d="M131 18 Q152 15 149 24 Q136 28 131 25 Z" fill="url(#brandGrad)"/>
+  <!-- Eye -->
+  <circle cx="124" cy="19" r="3" fill="#0B0B10"/>
+  <circle cx="123" cy="18" r="1.2" fill="#1a1a30" opacity="0.7"/>
+
+  <!-- Neck S-curve (thick stroke = filled look) -->
+  <path d="M114 33 Q109 48 100 58 Q91 69 86 82"
+        stroke="url(#brandGrad)" stroke-width="12"
+        fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Body (main oval) -->
+  <ellipse cx="74" cy="96" rx="28" ry="21" fill="url(#brandGrad)" transform="rotate(-10 74 96)"/>
+
+  <!-- Wing / tail feathers (blending into circuit) -->
+  <path d="M54 92 Q42 88 30 92 Q23 95 26 90 Q38 83 52 87 Z"
+        fill="url(#brandGrad)" opacity="0.88"/>
+  <path d="M56 100 Q43 100 33 105 Q26 107 29 102 Q40 95 55 98 Z"
+        fill="url(#brandGrad)" opacity="0.70"/>
+
+  <!-- Pixel-dissolution squares (body → right edge) -->
+  <rect x="98"  y="84"  width="7" height="7" rx="1.2" fill="#6B2FBE" opacity="0.90"/>
+  <rect x="107" y="88"  width="5" height="5" rx="1"   fill="#7B2FBE" opacity="0.72"/>
+  <rect x="95"  y="93"  width="4" height="4" rx="0.8" fill="#7535C0" opacity="0.80"/>
+  <rect x="104" cy="96" width="3" height="3" rx="0.5" fill="#7B2FBE" opacity="0.55"/>
+  <rect x="112" y="82"  width="4" height="4" rx="0.8" fill="#7B2FBE" opacity="0.60"/>
+  <rect x="116" y="89"  width="3" height="3" rx="0.5" fill="#7B2FBE" opacity="0.40"/>
+
+  <!-- Legs -->
+  <line x1="68" y1="115" x2="63" y2="130" stroke="url(#brandGrad)" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="80" y1="113" x2="78" y2="130" stroke="url(#brandGrad)" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Feet (tripod toes) -->
+  <line x1="63" y1="130" x2="56" y2="135" stroke="url(#brandGrad)" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="63" y1="130" x2="63" y2="136" stroke="url(#brandGrad)" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="63" y1="130" x2="70" y2="134" stroke="url(#brandGrad)" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="78" y1="130" x2="71" y2="135" stroke="url(#brandGrad)" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="78" y1="130" x2="78" y2="136" stroke="url(#brandGrad)" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="78" y1="130" x2="85" y2="134" stroke="url(#brandGrad)" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Ground wavy lines (PCB substrate) -->
+  <path d="M28 136 Q48 132 68 136 Q88 140 110 136"
+        stroke="url(#brandGrad)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M36 139 Q56 135 76 139 Q94 142 112 139"
+        stroke="url(#brandGrad)" stroke-width="1.8" fill="none" stroke-linecap="round" opacity="0.5"/>
+</svg>
