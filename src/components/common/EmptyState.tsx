@@ -1,7 +1,7 @@
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
-import logoUrl from '../../assets/logo.svg';
+import logoUrl from '../../assets/68e50a66e42f8802615262.png';
 
 interface EmptyStateProps {
   title:       string;

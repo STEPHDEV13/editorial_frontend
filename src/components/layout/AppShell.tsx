@@ -42,7 +42,7 @@ export default function AppShell() {
           flexDirection: 'column',
           minWidth: 0,
           // Shift right on desktop to avoid overlap with sidebar
-          ml: { md: `${sidebarW}px` },
+          // ml: { md: `${sidebarW}px` },
           transition: 'margin-left 0.25s ease',
         }}
       >

@@ -161,7 +161,7 @@ export default function ArticleFormPage() {
           Retour
         </Button>
         <BrandGradientText variant="h5" sx={{ flex: 1 }}>
-          {isEdit ? 'Modifier l'article' : 'Nouvel article'}
+          {isEdit ? "Modifier l'article" : "Nouvel article"}
         </BrandGradientText>
         {isEdit && <StatusChip status={currentStatus} />}
       </Box>

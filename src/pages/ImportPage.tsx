@@ -164,13 +164,13 @@ export default function ImportPage() {
           fontSize: '1rem',
         }}
       >
-        {importMut.isPending ? 'Import en cours…' : 'Lancer l'import'}
+        {importMut.isPending ? 'Import en cours…' : "Lancer l'import"}
       </Button>
 
       {/* ── Error from mutation ── */}
       {importMut.isError && (
         <Alert severity="error" sx={{ mb: 3 }}>
-          {(importMut.error as Error)?.message ?? 'Erreur lors de l'import.'}
+          {(importMut.error as Error)?.message ?? 'Erreur lors de l\'import.'}
         </Alert>
       )}
 

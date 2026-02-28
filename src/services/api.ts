@@ -11,7 +11,7 @@ import type {
 } from '../types';
 
 // ── Axios instance ──────────────────────────────────────────────────────────
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:4000';
 
 export const api = axios.create({
   baseURL: BASE_URL,
@@ -31,6 +31,20 @@ api.interceptors.response.use(
   }
 );
 
+// ── Helper: safely unwrap array responses ───────────────────────────────────
+function toArray<T>(data: unknown): T[] {
+  if (Array.isArray(data)) return data as T[];
+  if (data && typeof data === 'object') {
+    // try common envelope keys
+    for (const key of ['data', 'items', 'results', 'articles', 'categories', 'notifications', 'networks']) {
+      const val = (data as Record<string, unknown>)[key];
+      if (Array.isArray(val)) return val as T[];
+    }
+  }
+  console.warn('toArray: unexpected shape, returning []', data);
+  return [];
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // ARTICLES
 // ────────────────────────────────────────────────────────────────────────────
@@ -38,7 +52,7 @@ api.interceptors.response.use(
 /** GET /api/articles */
 export const getArticles = async (): Promise<Article[]> => {
   const { data } = await api.get('/api/articles');
-  return data;
+  return toArray<Article>(data);
 };
 
 /** GET /api/articles/:id */
@@ -77,7 +91,9 @@ export const patchArticleStatus = async (
 };
 
 /** POST /api/articles/:id/notify */
-export const notifyArticle = async (id: number | string): Promise<{ html?: string; message?: string }> => {
+export const notifyArticle = async (
+  id: number | string
+): Promise<{ html?: string; message?: string }> => {
   const { data } = await api.post(`/api/articles/${id}/notify`);
   return data;
 };
@@ -89,7 +105,7 @@ export const notifyArticle = async (id: number | string): Promise<{ html?: strin
 /** GET /api/categories */
 export const getCategories = async (): Promise<Category[]> => {
   const { data } = await api.get('/api/categories');
-  return data;
+  return toArray<Category>(data);
 };
 
 /** POST /api/categories */
@@ -119,14 +135,14 @@ export const deleteCategory = async (id: number | string): Promise<void> => {
 /** GET /api/networks */
 export const getNetworks = async (): Promise<Network[]> => {
   const { data } = await api.get('/api/networks');
-  return data;
+  return toArray<Network>(data);
 };
 
 // ────────────────────────────────────────────────────────────────────────────
 // IMPORT
 // ────────────────────────────────────────────────────────────────────────────
 
-/** POST /api/import/articles  – send JSON array in multipart or JSON body */
+/** POST /api/import/articles – send file in multipart body */
 export const importArticles = async (file: File): Promise<ImportResult> => {
   const formData = new FormData();
   formData.append('file', file);
@@ -143,5 +159,5 @@ export const importArticles = async (file: File): Promise<ImportResult> => {
 /** GET /api/notifications */
 export const getNotifications = async (): Promise<Notification[]> => {
   const { data } = await api.get('/api/notifications');
-  return data;
+  return toArray<Notification>(data);
 };

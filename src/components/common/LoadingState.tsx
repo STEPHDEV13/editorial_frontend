@@ -1,7 +1,7 @@
 import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
 import Typography from '@mui/material/Typography';
-import logoUrl from '../../assets/logo.svg';
+import logoUrl from '../../assets/68e50a66e42f8802615262.png';
 import { BRAND } from '../../theme';
 
 interface LoadingStateProps {

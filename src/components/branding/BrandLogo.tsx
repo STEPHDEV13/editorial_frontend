@@ -3,8 +3,8 @@ import Typography from '@mui/material/Typography';
 import { BRAND } from '../../theme';
 
 // The SVG is inline so it works without a server (no CORS issue during local dev)
-// Replace src/assets/logo.svg content to swap the brand icon.
-import logoUrl from '../../assets/logo.svg';
+// Replace src/assets/68e50a66e42f8802615262.png content to swap the brand icon.
+import logoUrl from '../../assets/68e50a66e42f8802615262.png';
 
 interface BrandLogoProps {
   /** 'full'    = logo + "TARAM GROUP" text (sidebar expanded, dashboard header)

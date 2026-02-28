@@ -54,10 +54,10 @@ VITE_API_URL=http://localhost:4000
 
 ## Logo & Identite visuelle
 
-Le logo se trouve dans **`src/assets/logo.svg`**.
+Le logo se trouve dans **`src/assets/68e50a66e42f8802615262.png`**.
 Pour remplacer le logo par le votre :
 
-1. Copiez votre fichier dans `src/assets/logo.svg` (ou `.png`)
+1. Copiez votre fichier dans `src/assets/68e50a66e42f8802615262.png` (ou `.png`)
 2. Si vous utilisez un `.png`, mettez a jour l'import dans `src/components/branding/BrandLogo.tsx`
 3. Le favicon est dans **`public/favicon.svg`** - remplacez-le par votre variante compacte
 
@@ -115,7 +115,7 @@ Le logo est utilise dans :
 ```
 src/
   assets/
-    logo.svg                   <- Remplacez par votre logo
+    68e50a66e42f8802615262.png                   <- Remplacez par votre logo
   theme.ts                     <- Theme MUI dark + couleurs brand
   types/index.ts               <- Types TypeScript globaux
   services/api.ts              <- Tous les appels API centralises
