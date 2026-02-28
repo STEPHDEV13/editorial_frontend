@@ -41,9 +41,14 @@ import {
   Article as ArticleIcon,
   History,
   Email,
+  CheckCircle,
+  ErrorOutline,
+  HourglassEmpty,
 } from '@mui/icons-material';
 import { getNotifications, getArticles, notifyArticle } from '../services/api';
 import type { Article, Notification, NotifyPayload } from '../types';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ── HTML Preview Dialog ──────────────────────────────────────────────────────
 function HtmlPreviewDialog({
@@ -259,12 +264,36 @@ export default function NotificationsPage() {
     return m;
   }, [articles]);
 
+  // ── Recipients & validation ────────────────────────────────────────────
   const recipientsList = recipientsInput
     .split(',')
     .map(s => s.trim())
     .filter(Boolean);
 
-  const canSend = !!selectedArticleId && recipientsList.length > 0 && !sendMut.isPending;
+  const invalidEmails = recipientsList.filter(e => !EMAIL_RE.test(e));
+
+  const canSend =
+    !!selectedArticleId &&
+    recipientsList.length > 0 &&
+    invalidEmails.length === 0 &&
+    !sendMut.isPending;
+
+  // ── History stats ──────────────────────────────────────────────────────
+  const [statusFilter, setStatusFilter] = useState<'all' | 'sent' | 'failed' | 'pending'>('all');
+
+  const historyStats = useMemo(() => ({
+    total:   sortedNotifs.length,
+    sent:    sortedNotifs.filter(n => n.status === 'sent').length,
+    failed:  sortedNotifs.filter(n => n.status === 'failed').length,
+    pending: sortedNotifs.filter(n => n.status === 'pending').length,
+  }), [sortedNotifs]);
+
+  const filteredNotifs = useMemo(() =>
+    statusFilter === 'all'
+      ? sortedNotifs
+      : sortedNotifs.filter((n: Notification) => n.status === statusFilter),
+    [sortedNotifs, statusFilter]
+  );
 
   return (
     <Box>
@@ -322,10 +351,13 @@ export default function NotificationsPage() {
                   value={recipientsInput}
                   onChange={e => setRecipientsInput(e.target.value)}
                   placeholder="email1@ex.com, email2@ex.com, …"
+                  error={invalidEmails.length > 0}
                   helperText={
-                    recipientsList.length > 0
-                      ? `${recipientsList.length} destinataire(s) détecté(s)`
-                      : 'Séparer les adresses par des virgules'
+                    invalidEmails.length > 0
+                      ? `Adresse(s) invalide(s) : ${invalidEmails.slice(0, 3).join(', ')}${invalidEmails.length > 3 ? ` +${invalidEmails.length - 3}` : ''}`
+                      : recipientsList.length > 0
+                        ? `${recipientsList.length} destinataire(s) détecté(s)`
+                        : 'Séparer les adresses par des virgules'
                   }
                 />
 
@@ -378,22 +410,75 @@ export default function NotificationsPage() {
                 <Typography variant="h6" fontWeight={700}>
                   Historique
                 </Typography>
-                <Chip label={notifications.length} size="small" color="primary" />
+                <Chip label={historyStats.total} size="small" color="primary" />
               </Stack>
+
+              {/* Stats summary */}
+              {historyStats.total > 0 && (
+                <Stack direction="row" spacing={1} mb={1.5} flexWrap="wrap">
+                  <Chip
+                    icon={<CheckCircle sx={{ fontSize: 14 }} />}
+                    label={`${historyStats.sent} envoyé(s)`}
+                    size="small"
+                    color="success"
+                    variant="outlined"
+                  />
+                  {historyStats.failed > 0 && (
+                    <Chip
+                      icon={<ErrorOutline sx={{ fontSize: 14 }} />}
+                      label={`${historyStats.failed} échoué(s)`}
+                      size="small"
+                      color="error"
+                      variant="outlined"
+                    />
+                  )}
+                  {historyStats.pending > 0 && (
+                    <Chip
+                      icon={<HourglassEmpty sx={{ fontSize: 14 }} />}
+                      label={`${historyStats.pending} en attente`}
+                      size="small"
+                      color="default"
+                      variant="outlined"
+                    />
+                  )}
+                </Stack>
+              )}
+
+              {/* Status filter */}
+              {historyStats.total > 0 && (
+                <Stack direction="row" spacing={0.5} mb={1} flexWrap="wrap">
+                  {(['all', 'sent', 'failed', 'pending'] as const).map(f => (
+                    <Chip
+                      key={f}
+                      label={f === 'all' ? 'Tous' : f === 'sent' ? 'Envoyés' : f === 'failed' ? 'Échoués' : 'En attente'}
+                      size="small"
+                      variant={statusFilter === f ? 'filled' : 'outlined'}
+                      color={statusFilter === f ? 'primary' : 'default'}
+                      onClick={() => setStatusFilter(f)}
+                      sx={{ cursor: 'pointer' }}
+                    />
+                  ))}
+                </Stack>
+              )}
+
               <Divider sx={{ mb: 1 }} />
 
               {loadingNotifs ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <Skeleton key={i} height={64} sx={{ mb: 1 }} />
                 ))
-              ) : sortedNotifs.length === 0 ? (
+              ) : filteredNotifs.length === 0 ? (
                 <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', borderRadius: 2, mt: 1 }}>
                   <NotifIcon sx={{ fontSize: 40, opacity: 0.2, mb: 1 }} />
-                  <Typography color="text.secondary">Aucune notification envoyée</Typography>
+                  <Typography color="text.secondary">
+                    {sortedNotifs.length === 0
+                      ? 'Aucune notification envoyée'
+                      : 'Aucune notification pour ce filtre'}
+                  </Typography>
                 </Paper>
               ) : (
-                <List dense disablePadding sx={{ maxHeight: 520, overflowY: 'auto' }}>
-                  {sortedNotifs.map((n: Notification) => (
+                <List dense disablePadding sx={{ maxHeight: 480, overflowY: 'auto' }}>
+                  {filteredNotifs.map((n: Notification) => (
                     <NotifHistoryItem
                       key={n.id}
                       notif={n}
