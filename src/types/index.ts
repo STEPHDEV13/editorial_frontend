@@ -1,22 +1,73 @@
-// ── Article ────────────────────────────────────────────────────────────────
+// ── Enums / Literals ──────────────────────────────────────────────────────────
+
+import { ReactNode } from "react";
+
 export type ArticleStatus = 'draft' | 'published' | 'archived';
 
-export interface Article {
-  id:           number | string;
-  title:        string;
-  content:      string;
-  summary?:     string;
+// ── Category ──────────────────────────────────────────────────────────────────
+
+export interface Category {
+  id:          number;
+  name:        string;
+  slug?:       string;
+  color?:      string;       // hex ou CSS color, ex: '#E53935'
+  description?: string;
+  createdAt?:  string;
+  updatedAt?:  string;
+}
+
+export interface CategoryFormData {
+  name:         string;
   slug?:        string;
-  status:       ArticleStatus;
+  color?:       string;
+  description?: string;
+}
+
+// ── Network ───────────────────────────────────────────────────────────────────
+
+export interface Network {
+  id:          number;
+  name:        string;
+  slug?:       string;
+  description?: string;
+  logoUrl?:    string;
+  createdAt?:  string;
+  updatedAt?:  string;
+}
+
+export interface NetworkFormData {
+  name:         string;
+  slug?:        string;
+  description?: string;
+  logoUrl?:     string;
+}
+
+// ── Article ───────────────────────────────────────────────────────────────────
+
+export interface Article {
+  id:           number;
+  title:        string;
+  slug?:        string;
+  content:      string;
+  excerpt:      string;
+  authorName:   string;
+  summary?:     string;
+  imageUrl?:    string;
   featured:     boolean;
-  imageUrl?:    string | null;
-  categoryId?:  number | string | null;
-  categoryIds?: Array<number | string>;
-  category?:    Category | null;
+  status:       ArticleStatus;
+
+  // Relations
+  networkId?:   number;
+  network?:     Network;
+
+  /** Support mono-catégorie (legacy) et multi-catégories */
+  categoryId?:  number;
+  category?:    Category;
+  categoryIds?: number[];
   categories?:  Category[];
-  networkId?:   number | string | null;
-  network?:     Network | null;
-  publishedAt?: string | null;
+
+  // Dates
+  publishedAt?: string;       // ISO 8601
   createdAt?:   string;
   updatedAt?:   string;
 }
@@ -24,96 +75,80 @@ export interface Article {
 export interface ArticleFormData {
   title:        string;
   content:      string;
+  excerpt:      string;
+  authorName:   string;
   summary?:     string;
   slug?:        string;
-  featured:     boolean;
   imageUrl?:    string;
-  categoryIds?: Array<number | string>;
-  networkId?:   string | number | null;
+  featured:     boolean;
+  categoryIds:  number[];
+  networkId:    string | number | null;
 }
+
+// ── Query params ──────────────────────────────────────────────────────────────
+
+export type SortDir = 'asc' | 'desc';
+export type SortBy  = 'createdAt' | 'updatedAt' | 'publishedAt' | 'title';
 
 export interface ArticleQueryParams {
   page?:        number;
   limit?:       number;
   search?:      string;
-  status?:      ArticleStatus | '';
-  categoryIds?: Array<number | string>;
-  networkId?:   number | string | null;
+  status?:      ArticleStatus;
+  networkId?:   number;
   featured?:    boolean;
-  sortBy?:      string;
-  sortDir?:     'asc' | 'desc';
+  sortBy?:      SortBy;
+  sortDir?:     SortDir;
+  categoryIds?: number[];
 }
 
-// ── Category ───────────────────────────────────────────────────────────────
-export interface Category {
-  id:           number | string;
-  name:         string;
-  slug?:        string;
-  color?:       string;
-  description?: string;
-  articleCount?: number;
-  createdAt?:   string;
+// ── Pagination ────────────────────────────────────────────────────────────────
+
+export interface PaginatedResponse<T> {
+  data:   T[];
+  total:  number;
+  page:   number;
+  limit:  number;
 }
 
-export interface CategoryFormData {
-  name:         string;
-  color?:       string;
-  description?: string;
-}
+// ── Notification ──────────────────────────────────────────────────────────────
 
-// ── Network ────────────────────────────────────────────────────────────────
-export interface Network {
-  id:           number | string;
-  name:         string;
-  slug?:        string;
-  description?: string;
-}
-
-// ── Notification ───────────────────────────────────────────────────────────
 export interface Notification {
-  id:           number | string;
-  title?:       string;
-  body?:        string;
-  html?:        string | null;
-  articleId?:   number | string | null;
-  article?:     Article | null;
-  recipients?:  string[];
-  recipientCount?: number;
-  subject?:     string;
-  sentAt?:      string | null;
-  status?:      'sent' | 'failed' | 'pending';
-  createdAt?:   string;
+  recipientCount: any;
+  recipients: any;
+  html: any;
+  subject: any;
+  status: any;
+  id:        number;
+  title?:    string;
+  message?:  string;
+  articleId?: number;
+  article?:  Article;
+  sentAt?:   string;
+  createdAt?: string;
 }
 
 export interface NotifyPayload {
-  recipients: string[];
+  channels?:  string[];       // ex: ['email', 'push']
+  message?:   string;
   subject?:   string;
+  recipients?: string[];
 }
 
-// ── Import ─────────────────────────────────────────────────────────────────
-export interface ImportErrorItem {
-  index: number;
-  error: string;
-  item?: unknown;
-}
+// ── Import ────────────────────────────────────────────────────────────────────
 
 export interface ImportResult {
-  success: number;
-  total:   number;
-  errors:  ImportErrorItem[];
-}
-
-// ── Pagination ─────────────────────────────────────────────────────────────
-export interface PaginatedResponse<T> {
-  data:  T[];
   total: number;
-  page:  number;
-  limit: number;
+  success: any;
+  imported:  number;
+  skipped:   number;
+  errors:    ImportError[];
 }
 
-// ── API error ──────────────────────────────────────────────────────────────
-export interface ApiErrorResponse {
+export interface ImportError {
+  index: number;
+  error: ReactNode;
+  row?:    number;
+  field?:  string;
   message: string;
-  status?: number;
-  errors?: Record<string, string[]>;
 }

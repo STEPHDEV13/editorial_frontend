@@ -7,6 +7,7 @@ import type {
   Category,
   CategoryFormData,
   Network,
+  NetworkFormData,
   Notification,
   NotifyPayload,
   ImportResult,
@@ -174,6 +175,26 @@ export const deleteCategory = async (id: number | string): Promise<void> => {
 export const getNetworks = async (): Promise<Network[]> => {
   const { data } = await api.get('/api/networks');
   return toArray<Network>(data);
+};
+
+/** POST /api/networks */
+export const createNetwork = async (payload: NetworkFormData): Promise<Network> => {
+  const { data } = await api.post('/api/networks', payload);
+  return data;
+};
+
+/** PUT /api/networks/:id */
+export const updateNetwork = async (
+  id: number | string,
+  payload: Partial<NetworkFormData>
+): Promise<Network> => {
+  const { data } = await api.put(`/api/networks/${id}`, payload);
+  return data;
+};
+
+/** DELETE /api/networks/:id */
+export const deleteNetwork = async (id: number | string): Promise<void> => {
+  await api.delete(`/api/networks/${id}`);
 };
 
 // ────────────────────────────────────────────────────────────────────────────

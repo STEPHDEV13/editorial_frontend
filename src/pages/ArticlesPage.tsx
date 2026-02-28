@@ -108,7 +108,7 @@ export default function ArticlesPage() {
   // ── Data queries ───────────────────────────────────────────────────────
   const { data: allArticles = [], isLoading: loadingArticles } = useQuery({
     queryKey: ['articles', 'all'],
-    queryFn: () => getArticles({ limit: 2000 }),
+    queryFn: () => getArticles({ limit: 100 }),
   });
 
   const { data: categories = [] } = useQuery({
