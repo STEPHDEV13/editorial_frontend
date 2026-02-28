@@ -4,7 +4,15 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
-    include: ['@popperjs/core', 'recharts'],
+    include: [
+      '@popperjs/core',
+      'recharts',
+      '@reduxjs/toolkit',
+      'immer',
+      'eventemitter3',
+      'decimal.js-light',
+      'es-toolkit',
+    ],
   },
   test: {
     environment: 'jsdom',

@@ -66,7 +66,6 @@ function plainTextLength(html: string): number {
 function previewHtml(content: string): string {
   const isHtml = /<[a-zA-Z][\s\S]*>/i.test(content);
   if (isHtml) return content;
-  // plain text: preserve line breaks
   return content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br/>');
 }
 
@@ -78,6 +77,10 @@ export const articleSchema = z.object({
     'Contenu minimum 50 caractères',
   ),
   summary:    z.string().max(500).optional().or(z.literal('')),
+ excerpt: z.string()
+  .trim()
+  .min(10, "L'extrait doit contenir au moins 10 caractères"),
+  authorName: z.string().min(1, 'Auteur requis').max(100),
   slug:       z.string().max(255).optional().or(z.literal('')),
   imageUrl:   z.string().url('URL invalide').optional().or(z.literal('')),
   featured:   z.boolean(),
@@ -95,9 +98,9 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'unsaved';
 
 function AutoSaveIndicator({ state }: { state: SaveState }) {
   const map: Record<SaveState, { icon: React.ReactNode; label: string; color: string }> = {
-    idle:    { icon: null,                                  label: '',                        color: 'text.disabled' },
-    saving:  { icon: <HourglassBottom fontSize="small" />, label: 'Sauvegarde…',             color: 'info.main' },
-    saved:   { icon: <CloudDone fontSize="small" />,       label: 'Brouillon sauvegardé',    color: 'success.main' },
+    idle:    { icon: null,                                  label: '',                              color: 'text.disabled' },
+    saving:  { icon: <HourglassBottom fontSize="small" />, label: 'Sauvegarde…',                  color: 'info.main' },
+    saved:   { icon: <CloudDone fontSize="small" />,       label: 'Brouillon sauvegardé',          color: 'success.main' },
     unsaved: { icon: <CloudOff fontSize="small" />,        label: 'Modifications non sauvegardées', color: 'warning.main' },
   };
   const { icon, label, color } = map[state];
@@ -152,6 +155,8 @@ export default function ArticleFormPage() {
       title:       '',
       content:     '',
       summary:     '',
+      excerpt:     '',
+      authorName:  '',
       slug:        '',
       imageUrl:    '',
       featured:    false,
@@ -171,9 +176,11 @@ export default function ArticleFormPage() {
     reset({
       title:       article.title,
       content:     article.content,
-      summary:     article.summary   ?? '',
-      slug:        article.slug      ?? '',
-      imageUrl:    article.imageUrl  ?? '',
+      summary:     article.summary    ?? '',
+      excerpt:     article.excerpt    ?? '',
+      authorName:  article.authorName ?? '',
+      slug:        article.slug       ?? '',
+      imageUrl:    article.imageUrl   ?? '',
       featured:    article.featured,
       categoryIds: selectedCats,
       networkId:   article.networkId ? String(article.networkId) : null,
@@ -230,9 +237,11 @@ export default function ArticleFormPage() {
   const buildPayload = useCallback((values: FormValues): ArticleFormData => ({
     title:       values.title,
     content:     values.content,
-    summary:     values.summary  || undefined,
-    slug:        values.slug     || undefined,
-    imageUrl:    values.imageUrl || undefined,
+    summary:     values.summary     || undefined,
+    excerpt:     values.excerpt,
+    authorName:  values.authorName,
+    slug:        values.slug        || undefined,
+    imageUrl:    values.imageUrl    || undefined,
     featured:    values.featured,
     categoryIds: (values.categoryIds as Category[]).map(c => c.id),
     networkId:   values.networkId,
@@ -269,14 +278,16 @@ export default function ArticleFormPage() {
   };
 
   // ── Preview watchers ─────────────────────────────────────────────────────
-  const watchTitle    = watch('title');
-  const watchContent  = watch('content');
-  const watchSummary  = watch('summary');
-  const watchImageUrl = watch('imageUrl');
-  const watchFeatured = watch('featured');
-  const watchCatIds   = watch('categoryIds') as Category[];
-  const watchStatus   = article?.status ?? 'draft';
-  const watchNetwork  = (networks as Network[]).find(n => String(n.id) === String(watch('networkId')));
+  const watchTitle      = watch('title');
+  const watchContent    = watch('content');
+  const watchSummary    = watch('summary');
+  const watchExcerpt    = watch('excerpt');
+  const watchAuthorName = watch('authorName');
+  const watchImageUrl   = watch('imageUrl');
+  const watchFeatured   = watch('featured');
+  const watchCatIds     = watch('categoryIds') as Category[];
+  const watchStatus     = article?.status ?? 'draft';
+  const watchNetwork    = (networks as Network[]).find(n => String(n.id) === String(watch('networkId')));
 
   if (loadingArticle) {
     return (
@@ -363,6 +374,8 @@ export default function ArticleFormPage() {
         {/* ── Left panel: form ──────────────────────────────────────────── */}
         <Grid item xs={12} md={7}>
           <Stack spacing={2}>
+
+            {/* ── Main content card ──────────────────────────────────── */}
             <Card>
               <CardContent>
                 <Stack spacing={2}>
@@ -373,6 +386,7 @@ export default function ArticleFormPage() {
                     error={!!errors.title}
                     helperText={errors.title?.message ?? 'Minimum 5 caractères'}
                   />
+
                   <TextField
                     label="Slug"
                     fullWidth
@@ -380,7 +394,26 @@ export default function ArticleFormPage() {
                     error={!!errors.slug}
                     helperText={errors.slug?.message}
                   />
+
                   <TextField
+                    label="Auteur *"
+                    fullWidth
+                    {...register('authorName')}
+                    error={!!errors.authorName}
+                    helperText={errors.authorName?.message ?? 'Nom complet de l\'auteur'}
+                  />
+
+                  <TextField
+                    label="Extrait *"
+                    fullWidth
+                    multiline
+                    rows={2}
+                    {...register('excerpt')}
+                    error={!!errors.excerpt}
+                    helperText={errors.excerpt?.message ?? 'Minimum 10 caractères, max 300 caractères'}
+                  />
+
+                  {/* <TextField
                     label="Résumé"
                     fullWidth
                     multiline
@@ -388,7 +421,7 @@ export default function ArticleFormPage() {
                     {...register('summary')}
                     error={!!errors.summary}
                     helperText={errors.summary?.message ?? 'Max 500 caractères'}
-                  />
+                  /> */}
 
                   {/* ── Rich text editor ─────────────────────────── */}
                   <Controller
@@ -406,17 +439,18 @@ export default function ArticleFormPage() {
                     )}
                   />
 
-                  <TextField
+                  {/* <TextField
                     label="URL image de couverture"
                     fullWidth
                     {...register('imageUrl')}
                     error={!!errors.imageUrl}
                     helperText={errors.imageUrl?.message}
-                  />
+                  /> */}
                 </Stack>
               </CardContent>
             </Card>
 
+            {/* ── Classification card ────────────────────────────────── */}
             <Card>
               <CardContent>
                 <Typography variant="subtitle2" fontWeight={700} mb={2}>
@@ -545,9 +579,31 @@ export default function ArticleFormPage() {
                 )}
               </Stack>
 
-              <Typography variant="h6" fontWeight={700} mb={1} sx={{ wordBreak: 'break-word' }}>
+              <Typography variant="h6" fontWeight={700} mb={0.5} sx={{ wordBreak: 'break-word' }}>
                 {watchTitle || <span style={{ opacity: 0.3 }}>Titre de l'article…</span>}
               </Typography>
+
+              {watchAuthorName && (
+                <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+                  Par {watchAuthorName}
+                </Typography>
+              )}
+
+              {watchExcerpt && (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  mb={1}
+                  sx={{
+                    fontStyle: 'italic',
+                    borderLeft: '3px solid',
+                    borderColor: 'primary.main',
+                    pl: 1.5,
+                  }}
+                >
+                  {watchExcerpt}
+                </Typography>
+              )}
 
               {watchSummary && (
                 <Typography variant="body2" color="text.secondary" mb={1.5}>
@@ -596,7 +652,6 @@ export default function ArticleFormPage() {
                     '& ul, & ol': { pl: 2.5, my: 0.5 },
                     '& li': { mb: 0.25 },
                     '& a':  { color: 'primary.main' },
-                    // Bottom fade-out when content overflows
                     '&:after': {
                       content: '""',
                       display: 'block',
@@ -608,7 +663,6 @@ export default function ArticleFormPage() {
                       pointerEvents: 'none',
                     },
                   }}
-                  // Safe: content is produced by our own contenteditable RichTextEditor
                   dangerouslySetInnerHTML={{ __html: previewHtml(watchContent) }}
                 />
               ) : (
