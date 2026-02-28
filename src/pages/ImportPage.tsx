@@ -136,8 +136,8 @@ export default function ImportPage() {
     "summary":    "Résumé optionnel",
     "slug":       "mon-article",
     "featured":   false,
-    "categoryId": 1,
-    "networkId":  1,
+    "categoryId": "cat-001",
+    "networkId":  "net-001",
     "imageUrl":   "https://example.com/img.jpg"
   }
 ]`}
